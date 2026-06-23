@@ -53,6 +53,31 @@
           <span id="warning-timer" class="warning-countdown">3</span>
         </div>
       </div>
+
+      <!-- Targeting hint shown while a booster waits for a fruit to be tapped -->
+      <div id="booster-hint" class="booster-hint hidden">
+        <span id="booster-hint-text">Tap a fruit</span>
+      </div>
+
+      <!-- In-game Booster Bar -->
+      <div id="booster-bar" class="booster-bar hidden">
+        <button class="booster-btn" data-booster="shrink" title="Thu nhỏ 1 quả xuống 1 size">
+          <span class="booster-icon">🔽</span>
+          <span class="booster-count" id="booster-count-shrink">0</span>
+        </button>
+        <button class="booster-btn" data-booster="grow" title="Tăng size 1 quả lên">
+          <span class="booster-icon">🔼</span>
+          <span class="booster-count" id="booster-count-grow">0</span>
+        </button>
+        <button class="booster-btn" data-booster="slow" title="Làm chậm vòng quay">
+          <span class="booster-icon">🐢</span>
+          <span class="booster-count" id="booster-count-slow">0</span>
+        </button>
+        <button class="booster-btn" data-booster="shuffle" title="Xáo trộn các quả">
+          <span class="booster-icon">🔀</span>
+          <span class="booster-count" id="booster-count-shuffle">0</span>
+        </button>
+      </div>
     </div>
 
     <!-- Bottom Controls Area -->

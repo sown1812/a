@@ -110,8 +110,42 @@ class LevelManager {
         goals: [
           { type: 'fruit', target: 10, count: 1, current: 0 }
         ]
+      },
+      {
+        id: 7,
+        name: "Triple Gravity",
+        description: "3 gravity wells! Fruits fall toward the nearest core. Pre-loaded with fruit.",
+        maxSpawnTier: 3,
+        orbitRadius: 248,
+        warningLimit: 85, // Per-well safe radius (overflow measured from nearest core)
+        launcherSpeed: 1.1,
+        maxSpawns: 45,
+        // Three cores in an equilateral triangle (135px from canvas center), kept clear of
+        // each other and tucked inside the orbit ring so no rings overlap.
+        centers: [
+          { x: 260, y: 205 },
+          { x: 143, y: 408 },
+          { x: 377, y: 408 }
+        ],
+        // Fruit already on the field at the start of the level (absolute logical coords)
+        preplaced: [
+          // Top well
+          { tier: 0, x: 248, y: 192 }, { tier: 0, x: 272, y: 192 }, { tier: 1, x: 260, y: 218 },
+          // Bottom-left well
+          { tier: 1, x: 131, y: 395 }, { tier: 1, x: 155, y: 395 }, { tier: 0, x: 143, y: 421 },
+          // Bottom-right well
+          { tier: 2, x: 365, y: 395 }, { tier: 0, x: 389, y: 395 }, { tier: 0, x: 377, y: 421 }
+        ],
+        goals: [
+          { type: 'score', target: 1200, current: 0 },
+          { type: 'fruit', target: 3, count: 2, current: 0 }
+        ]
       }
     ];
+
+    // Unlock every level for the player
+    this.unlockedLevelIndex = this.levels.length - 1;
+    localStorage.setItem('planet_merge_unlocked_level', this.unlockedLevelIndex.toString());
   }
 
   getCurrentLevel() {

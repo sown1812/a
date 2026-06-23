@@ -9,6 +9,9 @@ class PhysicsEngine {
     this.cx = cx;
     this.cy = cy;
     this.planetRadius = planetRadius;
+    // Gravity wells. Default: a single well at the canvas center.
+    // A level may replace this with several wells (e.g. 3) — each fruit is pulled to its nearest well.
+    this.centers = [{ x: cx, y: cy }];
     this.bodies = [];
     this.gravity = 0.038; // Tăng trọng lực để nẩy nhanh dứt khoát
     this.damping = 0.985; // Tăng quán tính (bớt ma sát không khí) để quả bay lướt mượt mà hơn
@@ -20,6 +23,19 @@ class PhysicsEngine {
   clear() {
     this.bodies = [];
     this.mergeAnimations = [];
+  }
+
+  // Return the gravity well nearest to a point (used for multi-center levels)
+  getNearestCenter(x, y) {
+    let best = this.centers[0];
+    let bestSq = Infinity;
+    for (const c of this.centers) {
+      const dx = x - c.x;
+      const dy = y - c.y;
+      const sq = dx * dx + dy * dy;
+      if (sq < bestSq) { bestSq = sq; best = c; }
+    }
+    return best;
   }
 
   addBody(x, y, tier) {
@@ -67,6 +83,11 @@ class PhysicsEngine {
 
     // 1. Verlet Integration & Spring Dynamics
     for (const b of this.bodies) {
+      // Each body is governed by its nearest gravity well (single-well levels just use the one center)
+      const _c = (this.centers.length > 1) ? this.getNearestCenter(b.x, b.y) : this.centers[0];
+      const ccx = _c.x;
+      const ccy = _c.y;
+
       // 1a. Scale animation with juicy overshoot bounce
       if (b.scale < b.targetScale) {
         b.scale += (b.targetScale - b.scale) * 0.15 * dt;
@@ -112,8 +133,8 @@ class PhysicsEngine {
       b.deformY += b.deformVelY * dt;
 
       // 1e. Radial Gravity & Tangent Damping to stabilize piles
-      const dx = b.x - this.cx;
-      const dy = b.y - this.cy;
+      const dx = b.x - ccx;
+      const dy = b.y - ccy;
       const dist = Math.sqrt(dx*dx + dy*dy);
 
       // First-fruit crossing state machine (radial-velocity-sign detection):
@@ -178,8 +199,8 @@ class PhysicsEngine {
       }
 
       // Pre-snap: quả đầu tiên đang về tâm, snap TRƯỚC khi update vị trí → không nhô qua tâm
-      if (b.isFirstFruit && b._fstate === 2 && !b.isSettled && dist < 5) {
-        b.x = this.cx; b.y = this.cy; b.px = this.cx; b.py = this.cy;
+      if (b.isFirstFruit && this.centers.length === 1 && b._fstate === 2 && !b.isSettled && dist < 5) {
+        b.x = ccx; b.y = ccy; b.px = ccx; b.py = ccy;
         b.isSettled = true;
         continue;
       }
@@ -192,8 +213,8 @@ class PhysicsEngine {
 
       // Phát hiện chạm viền (warningLimit) để kích hoạt hiệu ứng rơi vào nước
       if (!b.isSettled && !b.crossedBoundary) {
-        const checkDx = b.x - this.cx;
-        const checkDy = b.y - this.cy;
+        const checkDx = b.x - ccx;
+        const checkDy = b.y - ccy;
         const checkDist = Math.sqrt(checkDx * checkDx + checkDy * checkDy);
         if (checkDist <= this.warningLimit) {
           b.crossedBoundary = true;
@@ -210,23 +231,23 @@ class PhysicsEngine {
 
       // Hút chặt và khóa đúng tâm nếu fruit đã đến rất sát tâm hình tròn (postDist < 1.6) và tốc độ đã đủ chậm (actualSpeed < 0.15)
       // Điều này cho phép quả đi qua tâm (overshoot) khi có tốc độ cao, sau đó dao động chậm dần rồi mới khóa cứng để có cảm giác quán tính thật.
-      const postDx = b.x - this.cx;
-      const postDy = b.y - this.cy;
+      const postDx = b.x - ccx;
+      const postDy = b.y - ccy;
       const postDist = Math.sqrt(postDx * postDx + postDy * postDy);
       if (postDist < 1.6 && actualSpeed < 0.15) {
-        b.x = this.cx;
-        b.y = this.cy;
-        b.px = this.cx;
-        b.py = this.cy;
+        b.x = ccx;
+        b.y = ccy;
+        b.px = ccx;
+        b.py = ccy;
         b.isSettled = true;
       }
 
       // Quả đầu tiên quay về tâm: snap dừng hẳn (tốc độ quay về = tốc độ đi qua, bảo toàn năng lượng nhờ damping=1)
-      if (b.isFirstFruit && b._fstate === 2 && !b.isSettled && postDist < 10) {
-        b.x = this.cx;
-        b.y = this.cy;
-        b.px = this.cx;
-        b.py = this.cy;
+      if (b.isFirstFruit && this.centers.length === 1 && b._fstate === 2 && !b.isSettled && postDist < 10) {
+        b.x = ccx;
+        b.y = ccy;
+        b.px = ccx;
+        b.py = ccy;
         b.isSettled = true;
       }
 
@@ -241,8 +262,8 @@ class PhysicsEngine {
       // Settle if inside the warning limit (safe zone) AND speed is low to allow overshoot anim to play
       // Loại quả đầu tiên: nó có cơ chế settle riêng (snap tâm), không để general check can thiệp
       if (!b.isSettled && !b.isFirstFruit) {
-        const dx = b.x - this.cx;
-        const dy = b.y - this.cy;
+        const dx = b.x - ccx;
+        const dy = b.y - ccy;
         const dist = Math.sqrt(dx*dx + dy*dy);
         const speed = Math.sqrt(vx*vx + vy*vy);
         if (dist < this.warningLimit - 10 && speed < 0.15) {

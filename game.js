@@ -64,6 +64,22 @@ class Game {
     this.joinedTeam = localStorage.getItem('planet_merge_joined_team') || null;
     this.lastGiftTime = parseInt(localStorage.getItem('planet_merge_last_gift') || '0', 10);
 
+    // In-game boosters: shrink (thu nhỏ), grow (phóng to), slow (làm chậm vòng quay), shuffle (xáo trộn)
+    this.boosterDefs = {
+      shrink:  { icon: '🔽', hint: 'Chạm 1 quả để THU NHỎ xuống 1 size', target: true },
+      grow:    { icon: '🔼', hint: 'Chạm 1 quả để TĂNG size lên 1 bậc', target: true },
+      slow:    { icon: '🐢', hint: '', target: false },
+      shuffle: { icon: '🔀', hint: '', target: false }
+    };
+    this.boosters = {
+      shrink:  parseInt(localStorage.getItem('planet_merge_ib_shrink')  || '3', 10),
+      grow:    parseInt(localStorage.getItem('planet_merge_ib_grow')    || '3', 10),
+      slow:    parseInt(localStorage.getItem('planet_merge_ib_slow')    || '3', 10),
+      shuffle: parseInt(localStorage.getItem('planet_merge_ib_shuffle') || '3', 10)
+    };
+    this.activeBooster = null; // type currently waiting for a fruit tap (shrink/grow)
+    this.slowTimer = 0;        // ms remaining of the slow-orbit effect
+
     // Save defaults
     localStorage.setItem('planet_merge_coins', this.coins);
     localStorage.setItem('planet_merge_stars', this.stars);
@@ -91,7 +107,7 @@ class Game {
   setupUI() {
     document.getElementById('start-btn').addEventListener('click', () => {
       this.audio.playClick();
-      this.startLevel(this.levelManager.unlockedLevelIndex);
+      this.startLevel(0); // PLAY NOW always starts at Level 1
     });
 
     document.getElementById('level-select-btn').addEventListener('click', () => {
@@ -177,11 +193,27 @@ class Game {
       });
     }
 
+    // Booster bar buttons
+    document.querySelectorAll('.booster-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.audio.playClick();
+        this.useBooster(btn.getAttribute('data-booster'));
+      });
+    });
+
     this.canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      if (this.state === 'playing') {
-        this.launchFruit();
+      if (this.state !== 'playing') return;
+
+      // If a targeting booster (shrink/grow) is armed, the tap selects a fruit instead of launching
+      if (this.activeBooster) {
+        const pt = this.getCanvasPoint(e);
+        this.applyTargetBooster(pt.x, pt.y);
+        return;
       }
+
+      this.launchFruit();
     });
 
     window.addEventListener('keydown', (e) => {
@@ -224,6 +256,8 @@ class Game {
       this._noHeartsInterval = null;
     }
     document.querySelectorAll('.overlay-screen').forEach(scr => scr.classList.add('hidden'));
+    // Any overlay (menu, victory, gameover, level select…) means we're no longer in active play
+    if (screenId !== 'none') this.showBoosterBar(false);
     if (screenId === 'none') return;
     const screen = document.getElementById(screenId);
     if (screen) screen.classList.remove('hidden');
@@ -344,12 +378,33 @@ class Game {
     this.state = 'playing';
     this.isOverflowing = false;
     this.overflowTimer = 0;
+    this.activeBooster = null;
+    this.slowTimer = 0;
 
     const lvl = this.levelManager.getCurrentLevel();
     this.orbitRadius = lvl.orbitRadius || 295;
     this.warningLimit = lvl.warningLimit || 255;
     this.launcherSpeed = lvl.launcherSpeed || (0.95 + idx * 0.12);
     this.physics.warningLimit = this.warningLimit;
+
+    // Multi-center support: a level may define several gravity wells; otherwise use the single canvas center
+    if (lvl.centers && lvl.centers.length) {
+      this.physics.centers = lvl.centers.map(c => ({ x: c.x, y: c.y }));
+    } else {
+      this.physics.centers = [{ x: this.cx, y: this.cy }];
+    }
+
+    // Pre-placed fruits: seed the field with already-settled fruit defined by the level
+    if (lvl.preplaced && lvl.preplaced.length) {
+      for (const p of lvl.preplaced) {
+        const body = this.physics.addBody(p.x, p.y, p.tier);
+        body.scale = 1.0;
+        body.targetScale = 1.0;
+        body.isSettled = true;
+        body.px = p.x;
+        body.py = p.y;
+      }
+    }
 
     if (lvl.id === 1) {
       this.tutorialMode = true;
@@ -375,6 +430,7 @@ class Game {
     this.updatePreviewCanvas();
     this.drawEvolutionCircle();
     this.showScreen('none');
+    this.showBoosterBar(true);
   }
 
   getRandomSpawnTier() {
@@ -500,6 +556,196 @@ class Game {
     setTimeout(() => {
       this.launchCooldown = false;
     }, this.cooldownTime);
+  }
+
+  // ───────────────────────── BOOSTERS ─────────────────────────
+
+  // Convert a pointer event into logical game coordinates (this.width × this.height space)
+  getCanvasPoint(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) / rect.width * this.width,
+      y: (e.clientY - rect.top) / rect.height * this.height
+    };
+  }
+
+  refreshBoosterUI() {
+    Object.keys(this.boosterDefs).forEach(type => {
+      const countEl = document.getElementById(`booster-count-${type}`);
+      if (countEl) countEl.textContent = this.boosters[type];
+
+      const btn = document.querySelector(`.booster-btn[data-booster="${type}"]`);
+      if (btn) {
+        btn.classList.toggle('depleted', this.boosters[type] <= 0);
+        btn.classList.toggle('active', this.activeBooster === type);
+      }
+    });
+
+    const hint = document.getElementById('booster-hint');
+    const hintText = document.getElementById('booster-hint-text');
+    if (hint && hintText) {
+      if (this.activeBooster && this.boosterDefs[this.activeBooster].target) {
+        hintText.textContent = this.boosterDefs[this.activeBooster].hint;
+        hint.classList.remove('hidden');
+      } else {
+        hint.classList.add('hidden');
+      }
+    }
+  }
+
+  showBoosterBar(show) {
+    const bar = document.getElementById('booster-bar');
+    if (bar) bar.classList.toggle('hidden', !show);
+    if (!show) {
+      this.activeBooster = null;
+      const hint = document.getElementById('booster-hint');
+      if (hint) hint.classList.add('hidden');
+    }
+    this.refreshBoosterUI();
+  }
+
+  useBooster(type) {
+    if (this.state !== 'playing' || !this.boosterDefs[type]) return;
+
+    if (this.boosters[type] <= 0) {
+      // Out of this booster — flash the depleted button, do nothing else
+      const btn = document.querySelector(`.booster-btn[data-booster="${type}"]`);
+      if (btn) {
+        btn.classList.remove('shake');
+        void btn.offsetWidth; // restart animation
+        btn.classList.add('shake');
+      }
+      return;
+    }
+
+    const def = this.boosterDefs[type];
+
+    if (def.target) {
+      // Toggle targeting mode — next fruit tap consumes the booster
+      this.activeBooster = (this.activeBooster === type) ? null : type;
+    } else {
+      // Instant boosters
+      if (type === 'slow') this.activateSlow();
+      else if (type === 'shuffle') this.shuffleFruits();
+      this.activeBooster = null;
+    }
+    this.refreshBoosterUI();
+  }
+
+  consumeBooster(type) {
+    this.boosters[type] = Math.max(0, this.boosters[type] - 1);
+    localStorage.setItem(`planet_merge_ib_${type}`, this.boosters[type]);
+    this.refreshBoosterUI();
+  }
+
+  // Find the settled fruit whose body contains the tapped point (nearest wins)
+  getFruitAt(gx, gy) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const b of this.physics.bodies) {
+      if (b.merged) continue;
+      const dx = gx - b.x;
+      const dy = gy - b.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const hitR = b.r * Math.max(0.5, b.scale);
+      if (dist <= hitR && dist < bestDist) {
+        bestDist = dist;
+        best = b;
+      }
+    }
+    return best;
+  }
+
+  applyTargetBooster(gx, gy) {
+    const type = this.activeBooster;
+    if (!type) return;
+
+    const body = this.getFruitAt(gx, gy);
+    if (!body) return; // missed — keep targeting mode active so the player can retry
+
+    if (type === 'shrink') {
+      if (body.tier <= 0) {
+        // Cherry is already the smallest — nothing to shrink
+        this.floatingTexts.push({
+          x: body.x, y: body.y - 10, text: 'MIN SIZE',
+          color: '#ff5e97', life: 1.0, scale: 0.08, vy: -1.6, rot: 0
+        });
+        return;
+      }
+      this.morphFruit(body, body.tier - 1);
+    } else if (type === 'grow') {
+      if (body.tier >= FRUIT_CONFIGS.length - 1) {
+        // Watermelon is already the largest — nothing to grow
+        this.floatingTexts.push({
+          x: body.x, y: body.y - 10, text: 'MAX SIZE',
+          color: '#ff5e97', life: 1.0, scale: 0.08, vy: -1.6, rot: 0
+        });
+        return;
+      }
+      this.morphFruit(body, body.tier + 1);
+      this.levelManager.trackMergeGoal(body.tier);
+      this.updateHUDGoals();
+    }
+
+    this.consumeBooster(type);
+    this.activeBooster = null;
+    this.refreshBoosterUI();
+  }
+
+  // Transform a fruit body to a new tier in place with a juicy pop animation
+  morphFruit(body, newTier) {
+    const config = FRUIT_CONFIGS[newTier];
+    body.tier = newTier;
+    body.r = config.r;
+    body.scale = 0.35;
+    body.targetScale = 1.15;
+    body.growthPhase = true;
+    body.merged = false;
+    body.expression = 'surprised';
+    body.expressionTimer = 40;
+
+    this.particles.spawnMergeEffect(body.x, body.y, config.color, 14 + newTier * 2);
+    this.audio.playMerge && this.audio.playMerge(newTier);
+    if (navigator.vibrate) navigator.vibrate(16);
+  }
+
+  // Booster 3: temporarily slow the orbiting launcher
+  activateSlow() {
+    this.slowTimer = 6000; // 6 seconds of slow orbit
+    this.consumeBooster('slow');
+    this.floatingTexts.push({
+      x: this.cx, y: this.cy - 40, text: '🐢 SLOW!',
+      color: '#2d9cdb', life: 1.4, scale: 0.08, vy: -2.0, rot: 0
+    });
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+
+  // Booster 4: shuffle every settled fruit to a new random spot inside the circle
+  shuffleFruits() {
+    const movable = this.physics.bodies.filter(b => !b.merged);
+    if (movable.length === 0) return;
+
+    for (const b of movable) {
+      const maxR = Math.max(0, this.warningLimit - b.r - 4);
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.sqrt(Math.random()) * maxR; // uniform area distribution
+      const nx = this.cx + Math.cos(angle) * radius;
+      const ny = this.cy + Math.sin(angle) * radius;
+      b.x = nx;
+      b.y = ny;
+      b.px = nx; // zero out velocity so they settle from the new spot
+      b.py = ny;
+      b.isSettled = true;
+      b.scale = Math.max(0.6, b.scale);
+      b.targetScale = 1.0;
+      b.deformVelX = (Math.random() - 0.5) * 0.3;
+      b.deformVelY = (Math.random() - 0.5) * 0.3;
+    }
+
+    this.consumeBooster('shuffle');
+    this.particles.spawnMergeEffect(this.cx, this.cy, '#9b51e0', 20);
+    this.audio.playDrop && this.audio.playDrop();
+    if (navigator.vibrate) navigator.vibrate([12, 20, 12]);
   }
 
   addScore(points, x = this.cx, y = this.cy, color = '#ff5e97', showFloatingText = true) {
@@ -730,6 +976,13 @@ class Game {
           }
         }
 
+        // Booster 3: slow the orbit while the timer is active
+        if (this.slowTimer > 0) {
+          this.slowTimer -= 0.016 * dt * 1000;
+          currentSpeed *= 0.3;
+          if (this.slowTimer <= 0) this.slowTimer = 0;
+        }
+
         this.launcherAngle += currentSpeed * 0.016 * dt;
         if (this.launcherAngle >= Math.PI * 2) {
           this.launcherAngle -= Math.PI * 2;
@@ -755,8 +1008,10 @@ class Game {
 
         let overflowDetected = false;
         for (const b of this.physics.bodies) {
-          const dx = b.x - this.cx;
-          const dy = b.y - this.cy;
+          // Measure overflow from the body's nearest gravity well (handles multi-center levels)
+          const c = this.physics.getNearestCenter(b.x, b.y);
+          const dx = b.x - c.x;
+          const dy = b.y - c.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
 
           if (b.isSettled && dist > this.warningLimit) {
@@ -874,7 +1129,15 @@ class Game {
 
   drawOrbitGuidelines(ctx) {
     ctx.save();
-    // Warning boundary line (dashed pink ring) - Only display this single circle
+
+    // Orbit path ring — the circular border the launcher rotates along
+    ctx.strokeStyle = 'rgba(155, 81, 224, 0.22)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(this.cx, this.cy, this.orbitRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Warning boundary line (dashed pink ring) — one per gravity well
     if (this.isOverflowing) {
       ctx.strokeStyle = 'rgba(255, 94, 151, 0.6)';
       ctx.shadowColor = 'rgba(255, 94, 151, 0.4)';
@@ -884,17 +1147,23 @@ class Game {
     }
     ctx.lineWidth = 2.0;
     ctx.setLineDash([4, 6]);
-    ctx.beginPath();
-    ctx.arc(this.cx, this.cy, this.warningLimit, 0, Math.PI * 2);
-    ctx.stroke();
+    for (const c of this.physics.centers) {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, this.warningLimit, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.setLineDash([]); // Reset line dash to prevent leakage to physical bodies drawing
     ctx.restore();
   }
 
   drawPlanetCore(ctx) {
+    for (const c of this.physics.centers) {
+      this.drawCoreAt(ctx, c.x, c.y);
+    }
+  }
+
+  drawCoreAt(ctx, x, y) {
     ctx.save();
-    const x = this.cx;
-    const y = this.cy;
 
     const glowGrad = ctx.createRadialGradient(x, y, 0, x, y, 32);
     glowGrad.addColorStop(0, 'rgba(155, 81, 224, 0.28)');
@@ -930,8 +1199,10 @@ class Game {
     const time = Date.now();
     const pulseWidth = Math.sin(time / 120) * 1.5;
 
-    const guideEndX = this.cx + Math.cos(this.launcherAngle) * this.warningLimit;
-    const guideEndY = this.cy + Math.sin(this.launcherAngle) * this.warningLimit;
+    // Single-center: laser stops at the safe-zone edge. Multi-center: aim at the shared centroid.
+    const guideLen = (this.physics.centers.length > 1) ? this.orbitRadius : this.warningLimit;
+    const guideEndX = this.cx + Math.cos(this.launcherAngle) * guideLen;
+    const guideEndY = this.cy + Math.sin(this.launcherAngle) * guideLen;
 
     // Layer 1: Thick Outer Laser Glow
     ctx.strokeStyle = laserColor;
