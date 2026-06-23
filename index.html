@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Planet Merge - Fruit Cosmos</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Starfield background in CSS, game canvas in foreground -->
+  <div class="space-bg">
+    <div class="stars"></div>
+    <div class="stars2"></div>
+    <div class="stars3"></div>
+  </div>
+
+  <div class="game-container">
+    <!-- HUD: Head-Up Display -->
+    <header class="hud">
+      <div class="hud-item level-info">
+        <span class="label">LEVEL</span>
+        <span id="level-display" class="value">1</span>
+      </div>
+      <div class="hud-item score-info">
+        <span class="label">SCORE</span>
+        <span id="score-display" class="value">0</span>
+      </div>
+      <div class="hud-item spawn-info">
+        <span class="label">SPAWNS</span>
+        <span id="spawn-display" class="value">0</span>
+      </div>
+      <div class="hud-item goal-info">
+        <span class="label">GOAL</span>
+        <div id="goal-container" class="goal-badges">
+          <!-- Dynamically populated goals, e.g. fruit badge with remaining count -->
+        </div>
+      </div>
+    </header>
+
+    <!-- Canvas Play Area -->
+    <div class="canvas-wrapper">
+      <canvas id="game-canvas"></canvas>
+      
+      <!-- In-game warnings (e.g. countdown before overflow failure) -->
+      <div id="warning-overlay" class="warning-overlay hidden">
+        <div class="warning-box">
+          <span class="warning-icon">⚠️</span>
+          <span class="warning-title">OVER LIMIT!</span>
+          <span id="warning-timer" class="warning-countdown">3</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Controls Area -->
+    <div class="bottom-controls">
+      <!-- Evolution Preview Panel (Persistent) -->
+      <div class="evolution-panel">
+        <span class="label">EVOLUTION</span>
+        <div class="evolution-box">
+          <canvas id="evolution-canvas" width="360" height="42"></canvas>
+        </div>
+      </div>
+
+      <!-- Next Fruit Preview Panel -->
+      <div class="next-preview-panel">
+        <span class="label">NEXT</span>
+        <div class="preview-box">
+          <canvas id="preview-canvas" width="60" height="60"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen Overlays -->
+    
+    <!-- 1. Main Menu / Start Screen (Overhauled with Shop, Play, Teams tabs) -->
+    <div id="menu-screen" class="overlay-screen menu-container-overlay">
+      
+      <!-- Top Resources Header -->
+      <header class="menu-header">
+        <div class="resource-badge lives-badge">
+          <span class="icon">❤️</span>
+          <span id="lives-count" class="val">5</span>
+        </div>
+        <div class="resource-badge coins-badge">
+          <span class="icon">🪙</span>
+          <span id="coins-count" class="val">100</span>
+        </div>
+        <div class="resource-badge stars-badge">
+          <span class="icon">⭐</span>
+          <span id="stars-count" class="val">0</span>
+        </div>
+      </header>
+
+      <!-- Main Tab Content Area -->
+      <div class="menu-content-wrapper">
+        
+        <!-- A. SHOP TAB -->
+        <div id="tab-shop" class="menu-tab-content hidden"></div>
+
+        <!-- B. HOME (PLAY) TAB -->
+        <div id="tab-home" class="menu-tab-content">
+          <div class="glass-card menu-card animate-pop">
+            <h1 class="game-title">PLANET<br><span class="highlight">MERGE</span></h1>
+            <p class="game-subtitle">Cosmic Fruit Merge</p>
+            
+            <div class="progression-banner">
+              <span class="current-level-label">CURRENT LEVEL TARGET</span>
+              <h3 id="menu-current-level-name">Level 1: Cosmic Intro</h3>
+              <p id="menu-current-level-desc">Merge Cherries to create a Tangerine.</p>
+            </div>
+
+            <button id="start-btn" class="btn btn-primary btn-pulse btn-play-large">PLAY NOW</button>
+            <button id="level-select-btn" class="btn btn-secondary">SELECT LEVEL</button>
+            
+            <div class="instructions">
+              <h3>How to Play:</h3>
+              <p>🍓 Launchable fruits rotate around the planet center.</p>
+              <p>👉 <strong>Tap screen</strong> to shoot fruit into the core.</p>
+              <p>🍓 Merge 2 identical fruits to evolve them.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- C. TEAMS TAB -->
+        <div id="tab-teams" class="menu-tab-content hidden"></div>
+
+      </div>
+
+      <!-- Bottom Tab Navigation Bar -->
+      <nav class="bottom-nav">
+        <button id="nav-shop-btn" class="nav-item">
+          <span class="nav-icon">🏪</span>
+          <span class="nav-label">Shop</span>
+        </button>
+        <button id="nav-home-btn" class="nav-item active">
+          <div class="play-icon-wrap">
+            <span class="nav-icon">🎮</span>
+          </div>
+          <span class="nav-label">Play</span>
+        </button>
+        <button id="nav-teams-btn" class="nav-item">
+          <span class="nav-icon">👥</span>
+          <span class="nav-label">Teams</span>
+        </button>
+      </nav>
+
+    </div>
+
+    <!-- 2. Level Select Screen -->
+    <div id="level-screen" class="overlay-screen hidden">
+      <div class="glass-card level-card animate-pop">
+        <button id="level-back-btn" class="back-btn">←</button>
+        <h2>SELECT LEVEL</h2>
+        <div id="levels-grid" class="levels-grid">
+          <!-- Dynamically populated levels -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Victory Screen -->
+    <div id="victory-screen" class="overlay-screen hidden">
+      <div class="glass-card victory-card animate-pop">
+        <div class="victory-icon">🎉</div>
+        <h2 class="victory-title">VICTORY!</h2>
+        <p class="victory-subtitle">You cleared the level!</p>
+        <div class="stats-box">
+          <div class="stat-row">
+            <span>Score achieved:</span>
+            <span id="victory-score" class="stat-val">0</span>
+          </div>
+        </div>
+        <button id="next-level-btn" class="btn btn-primary">NEXT LEVEL</button>
+        <button id="victory-menu-btn" class="btn btn-secondary">MAIN MENU</button>
+      </div>
+    </div>
+
+    <!-- 4. Game Over Screen -->
+    <div id="no-hearts-screen" class="overlay-screen hidden">
+      <div class="glass-card gameover-card animate-pop">
+        <div class="gameover-icon">❤️</div>
+        <h2 class="gameover-title">OUT OF HEARTS!</h2>
+        <p class="gameover-subtitle">You need a heart to keep playing.</p>
+        <div class="stats-box">
+          <div class="stat-row">
+            <span>Next heart in:</span>
+            <span id="heart-regen-timer" class="stat-val">30:00</span>
+          </div>
+        </div>
+        <button id="watch-ad-heart-btn" class="btn btn-primary">WATCH AD +1 ❤️</button>
+        <button id="no-hearts-menu-btn" class="btn btn-secondary">MAIN MENU</button>
+      </div>
+    </div>
+
+    <div id="gameover-screen" class="overlay-screen hidden">
+      <div class="glass-card gameover-card animate-pop">
+        <div class="gameover-icon">💥</div>
+        <h2 class="gameover-title">GAME OVER</h2>
+        <p class="gameover-subtitle">Fruits overflowed the defense limit!</p>
+        <div class="stats-box">
+          <div class="stat-row">
+            <span>Goals remaining:</span>
+            <div id="defeat-goals" class="goal-badges small-badges"></div>
+          </div>
+        </div>
+        <button id="retry-btn" class="btn btn-primary">RETRY</button>
+        <button id="gameover-menu-btn" class="btn btn-secondary">MAIN MENU</button>
+      </div>
+    </div>
+
+
+  </div>
+
+  <script src="audio.js"></script>
+  <script src="particles.js"></script>
+  <script src="level.js"></script>
+  <script src="physics.js"></script>
+  <script src="shop.js"></script>
+  <script src="teams.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
