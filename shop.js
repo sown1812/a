@@ -75,21 +75,21 @@ class Shop {
           <div class="shop-section-title">Boosters</div>
 
           <div class="shop-item">
-            <div class="item-icon">🔽</div>
+            <div class="item-icon">🌀</div>
             <div class="item-details">
-              <span class="item-name">Shrink ×1</span>
-              <span class="item-desc">Tap a fruit to reduce it 1 tier</span>
+              <span class="item-name">Vacuum ×1</span>
+              <span class="item-desc">Tap a fruit to pull it out. Tap HELD to release it</span>
             </div>
-            <button class="shop-btn buy-btn cost-btn" data-type="booster" data-name="Shrink ×1" data-coins="0" data-shrink="1" data-price="$0.49">$0.49</button>
+            <button class="shop-btn buy-btn cost-btn" data-type="booster" data-name="Vacuum ×1" data-coins="0" data-vacuum="1" data-price="$0.49">$0.49</button>
           </div>
 
           <div class="shop-item">
-            <div class="item-icon">🔽</div>
+            <div class="item-icon">🌀</div>
             <div class="item-details">
-              <span class="item-name">Shrink ×3</span>
-              <span class="item-desc">3 Shrinks — best value</span>
+              <span class="item-name">Vacuum ×3</span>
+              <span class="item-desc">3 Vacuums — best value</span>
             </div>
-            <button class="shop-btn buy-btn cost-btn" data-type="booster" data-name="Shrink ×3" data-coins="0" data-shrink="3" data-price="$0.99">$0.99</button>
+            <button class="shop-btn buy-btn cost-btn" data-type="booster" data-name="Vacuum ×3" data-coins="0" data-vacuum="3" data-price="$0.99">$0.99</button>
           </div>
 
           <div class="shop-item">
@@ -174,9 +174,9 @@ class Shop {
             <div class="item-icon">⚡</div>
             <div class="item-details">
               <span class="item-name">Starter Bundle</span>
-              <span class="item-desc">500 🪙 + 2 🔽 Shrink + 2 🔼 Grow</span>
+              <span class="item-desc">500 🪙 + 2 🌀 Vacuum + 2 🔼 Grow</span>
             </div>
-            <button class="shop-btn buy-btn cost-btn" data-type="bundle" data-name="Starter Bundle" data-coins="500" data-shrink="2" data-grow="2" data-price="$1.99">$1.99</button>
+            <button class="shop-btn buy-btn cost-btn" data-type="bundle" data-name="Starter Bundle" data-coins="500" data-vacuum="2" data-grow="2" data-price="$1.99">$1.99</button>
           </div>
 
           <div class="shop-item">
@@ -192,18 +192,18 @@ class Shop {
             <div class="item-icon">🌈</div>
             <div class="item-details">
               <span class="item-name">Rainbow Bundle</span>
-              <span class="item-desc">2,000 🪙 + 3 🔽 + 3 🔼 + 3 🔀</span>
+              <span class="item-desc">2,000 🪙 + 3 🌀 + 3 🔼 + 3 🔀</span>
             </div>
-            <button class="shop-btn buy-btn cost-btn" data-type="bundle" data-name="Rainbow Bundle" data-coins="2000" data-shrink="3" data-grow="3" data-shuffle="3" data-price="$4.99">$4.99</button>
+            <button class="shop-btn buy-btn cost-btn" data-type="bundle" data-name="Rainbow Bundle" data-coins="2000" data-vacuum="3" data-grow="3" data-shuffle="3" data-price="$4.99">$4.99</button>
           </div>
 
           <div class="shop-item shop-item-highlight">
             <div class="item-icon">👑</div>
             <div class="item-details">
               <span class="item-name">Mega Combo Bundle</span>
-              <span class="item-desc">4k 🪙 + 5 🔽 + 5 🔼 + 5 🐢 + 5 🔀 — Best Deal!</span>
+              <span class="item-desc">4k 🪙 + 5 🌀 + 5 🔼 + 5 🐢 + 5 🔀 — Best Deal!</span>
             </div>
-            <button class="shop-btn buy-btn cost-btn" data-type="bundle" data-name="Mega Combo Bundle" data-coins="4000" data-shrink="5" data-grow="5" data-slow="5" data-shuffle="5" data-price="$7.99">$7.99</button>
+            <button class="shop-btn buy-btn cost-btn" data-type="bundle" data-name="Mega Combo Bundle" data-coins="4000" data-vacuum="5" data-grow="5" data-slow="5" data-shuffle="5" data-price="$7.99">$7.99</button>
           </div>
 
           <!-- ── VIP PASS ── -->
@@ -366,7 +366,7 @@ class Shop {
 
         // Read all 4 actual game booster quantities from data attributes
         const boostersAwarded = {
-          shrink:  parseInt(btn.getAttribute('data-shrink')  || '0', 10),
+          vacuum:  parseInt(btn.getAttribute('data-vacuum')  || '0', 10),
           grow:    parseInt(btn.getAttribute('data-grow')    || '0', 10),
           slow:    parseInt(btn.getAttribute('data-slow')    || '0', 10),
           shuffle: parseInt(btn.getAttribute('data-shuffle') || '0', 10),
@@ -409,7 +409,7 @@ class Shop {
           this.game.updateResourceHeader();
           this.game.particles.spawnConfetti(this.game.width / 2, this.game.width);
 
-          const ICONS = { shrink: '🔽', grow: '🔼', slow: '🐢', shuffle: '🔀' };
+          const ICONS = { vacuum: '🌀', grow: '🔼', slow: '🐢', shuffle: '🔀' };
           const parts = [];
           if (coinsAwarded > 0) parts.push(`+${coinsAwarded} 🪙`);
           for (const [key, amt] of Object.entries(boostersAwarded)) {
@@ -428,7 +428,7 @@ class Shop {
   }
 
   // Add booster quantities to the live game state and persist to localStorage.
-  // Expects an object like { shrink: 1, grow: 0, slow: 2, shuffle: 1 }.
+  // Expects an object like { vacuum: 1, grow: 0, slow: 2, shuffle: 1 }.
   _addBoosters(amounts) {
     for (const [key, amt] of Object.entries(amounts)) {
       if (amt > 0 && key in this.game.boosters) {

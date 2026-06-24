@@ -352,4 +352,32 @@ class ParticleSystem {
       });
     }
   }
+
+  spawnBlackHoleAbsorption(x, y) {
+    const count = this.isPerfMode ? 6 : 12;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 3.5;
+      this.particles.push({
+        x: x + Math.cos(angle) * 14,
+        y: y + Math.sin(angle) * 14,
+        vx: -Math.cos(angle) * speed,
+        vy: -Math.sin(angle) * speed,
+        r: 2 + Math.random() * 3,
+        color: '#8e44ad',
+        life: 1.0,
+        decay: 0.06 + Math.random() * 0.04,
+        gravity: 0,
+        isStar: false,
+        rot: Math.random() * Math.PI,
+        rotSpeed: (Math.random() - 0.5) * 0.3
+      });
+    }
+    this.rings.push({
+      x, y, r: 4, maxR: 20,
+      color: '#4a235a',
+      life: 1.0, decay: 0.12,
+      isFlash: false
+    });
+  }
 }

@@ -47,7 +47,7 @@
     <!-- Canvas Play Area -->
     <div class="canvas-wrapper">
       <canvas id="game-canvas"></canvas>
-      
+
       <!-- In-game warnings (e.g. countdown before overflow failure) -->
       <div id="warning-overlay" class="warning-overlay hidden">
         <div class="warning-box">
@@ -61,26 +61,26 @@
       <div id="booster-hint" class="booster-hint hidden">
         <span id="booster-hint-text">Tap a fruit</span>
       </div>
+    </div>
 
-      <!-- In-game Booster Bar -->
-      <div id="booster-bar" class="booster-bar hidden">
-        <button class="booster-btn" data-booster="shrink" title="Thu nhỏ 1 quả xuống 1 size">
-          <span class="booster-icon">🔽</span>
-          <span class="booster-count" id="booster-count-shrink">0</span>
-        </button>
-        <button class="booster-btn" data-booster="grow" title="Tăng size 1 quả lên">
-          <span class="booster-icon">🔼</span>
-          <span class="booster-count" id="booster-count-grow">0</span>
-        </button>
-        <button class="booster-btn" data-booster="slow" title="Làm chậm vòng quay">
-          <span class="booster-icon">🐢</span>
-          <span class="booster-count" id="booster-count-slow">0</span>
-        </button>
-        <button class="booster-btn" data-booster="shuffle" title="Xáo trộn các quả">
-          <span class="booster-icon">🔀</span>
-          <span class="booster-count" id="booster-count-shuffle">0</span>
-        </button>
-      </div>
+    <!-- In-game Booster Bar (below canvas, horizontal row) -->
+    <div id="booster-bar" class="booster-bar hidden">
+      <button class="booster-btn" data-booster="vacuum" title="Hút 1 quả ra ngoài, giữ trong slot HELD">
+        <span class="booster-icon">🌀</span>
+        <span class="booster-count" id="booster-count-vacuum">0</span>
+      </button>
+      <button class="booster-btn" data-booster="grow" title="Tăng size 1 quả lên">
+        <span class="booster-icon">🔼</span>
+        <span class="booster-count" id="booster-count-grow">0</span>
+      </button>
+      <button class="booster-btn" data-booster="slow" title="Làm chậm vòng quay">
+        <span class="booster-icon">🐢</span>
+        <span class="booster-count" id="booster-count-slow">0</span>
+      </button>
+      <button class="booster-btn" data-booster="shuffle" title="Xáo trộn các quả">
+        <span class="booster-icon">🔀</span>
+        <span class="booster-count" id="booster-count-shuffle">0</span>
+      </button>
     </div>
 
     <!-- Bottom Controls Area -->
@@ -98,6 +98,14 @@
         <span class="label">NEXT</span>
         <div class="preview-box">
           <canvas id="preview-canvas" width="60" height="60"></canvas>
+        </div>
+      </div>
+
+      <!-- Vacuum Hold Slot -->
+      <div class="vacuum-hold-panel" id="vacuum-hold-panel" title="Tap để thả quả đang giữ">
+        <span class="label">HELD</span>
+        <div class="preview-box">
+          <canvas id="vacuum-canvas" width="60" height="60"></canvas>
         </div>
       </div>
     </div>
@@ -201,6 +209,10 @@
           <span class="vstar">★</span>
         </div>
         <div class="stats-box">
+          <div class="stat-row" id="victory-bonus-row" style="display:none;">
+            <span>Shot bonus:</span>
+            <span id="victory-bonus" class="stat-val" style="color:#ffd700;">+0</span>
+          </div>
           <div class="stat-row">
             <span>Score achieved:</span>
             <span id="victory-score" class="stat-val">0</span>

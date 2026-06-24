@@ -12,6 +12,10 @@ const _tier2Image = new Image();
 _tier2Image.src = 'giang.png';
 const _tier1Image = new Image();
 _tier1Image.src = 'phong.png';
+const _tier5Image = new Image();
+_tier5Image.src = 'Huy.png';
+const _tier10Image = new Image();
+_tier10Image.src = 'A linh.png';
 
 // Render a face photo cropped to the fruit's circle.
 // Uses object-fit:cover semantics (shorter dimension fills diameter) and
@@ -40,6 +44,8 @@ class PhysicsEngine {
     // Gravity wells. Default: a single well at the canvas center.
     // A level may replace this with several wells (e.g. 3) — each fruit is pulled to its nearest well.
     this.centers = [{ x: cx, y: cy }];
+    this.blackHoles = []; // Mỗi entry: { x, y, radius } — hút và hủy fruit
+    this.shrinkZones = []; // Mỗi entry: { x, y, width, height } — giảm tier 1 bậc khi đi qua
     this.bodies = [];
     this.gravity = 0.038; // Tăng trọng lực để nẩy nhanh dứt khoát
     this.damping = 0.985; // Tăng quán tính (bớt ma sát không khí) để quả bay lướt mượt mà hơn
@@ -305,6 +311,48 @@ class PhysicsEngine {
       }
     }
 
+    // ── Black Hole Absorption ──────────────────────────────────────────────
+    // Sau gravity step, trước collision — lặp ngược để splice không bỏ sót body
+    if (this.blackHoles && this.blackHoles.length > 0) {
+      for (let i = this.bodies.length - 1; i >= 0; i--) {
+        const b = this.bodies[i];
+        for (const bh of this.blackHoles) {
+          const bdx = b.x - bh.x;
+          const bdy = b.y - bh.y;
+          const bdist = Math.sqrt(bdx * bdx + bdy * bdy);
+          const effectiveR = b.r * Math.min(1, b.scale);
+          if (bdist < bh.radius + effectiveR) {
+            if (this._onAbsorb) this._onAbsorb(bh.x, bh.y);
+            this.bodies.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
+    // ── End Black Hole Absorption ──────────────────────────────────────────
+
+    // ── Shrink Zone Check ──────────────────────────────────────────────────
+    // Mỗi frame kiểm tra từng body với từng zone hình chữ nhật.
+    // inShrinkZone flag ngăn shrink nhiều lần trong 1 lần đi qua; reset khi ra khỏi zone.
+    if (this.shrinkZones && this.shrinkZones.length > 0) {
+      for (const b of this.bodies) {
+        let insideAny = false;
+        for (const zone of this.shrinkZones) {
+          if (b.x >= zone.x && b.x <= zone.x + zone.width &&
+              b.y >= zone.y && b.y <= zone.y + zone.height) {
+            insideAny = true;
+            if (!b.inShrinkZone) {
+              b.inShrinkZone = true;
+              if (b.tier > 0 && this._onShrink) this._onShrink(b);
+            }
+            break;
+          }
+        }
+        if (!insideAny) b.inShrinkZone = false;
+      }
+    }
+    // ── End Shrink Zone Check ──────────────────────────────────────────────
+
     // 2. Resolve Constraints & Collisions
     const iterations = this.isPerfMode ? 5 : 8;
     const mergesToProcess = [];
@@ -486,7 +534,7 @@ class PhysicsEngine {
       
       this.drawFruitBody(ctx, 0, 0, b.r, b.tier, b.angle || 0);
       
-      if (b.r > 5 && b.tier !== 5 && b.tier !== 4 && b.tier !== 3 && b.tier !== 2 && b.tier !== 1) {
+      if (b.r > 5 && b.tier !== 10 && b.tier !== 5 && b.tier !== 4 && b.tier !== 3 && b.tier !== 2 && b.tier !== 1) {
         this.drawFace(ctx, 0, 0, b.r, b.blinking, b.expression, b.tier);
       }
       
@@ -551,6 +599,8 @@ class PhysicsEngine {
     }
 
     // Face photo overrides for tiers 2, 3, 4
+    if (tier === 10) { _drawFaceCircle(ctx, _tier10Image, x, y, r, angle, '#10ac84'); ctx.restore(); return; }
+    if (tier === 5) { _drawFaceCircle(ctx, _tier5Image, x, y, r, angle, '#d63031'); ctx.restore(); return; }
     if (tier === 4) { _drawFaceCircle(ctx, _tier4Image, x, y, r, angle, '#ff5e36'); ctx.restore(); return; }
     if (tier === 3) { _drawFaceCircle(ctx, _tier3Image, x, y, r, angle, '#ffa502'); ctx.restore(); return; }
     if (tier === 2) { _drawFaceCircle(ctx, _tier2Image, x, y, r, angle, '#8c46ff'); ctx.restore(); return; }

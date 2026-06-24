@@ -9,6 +9,10 @@ class Game {
     this.previewCanvas = document.getElementById('preview-canvas');
     this.previewCtx = this.previewCanvas.getContext('2d');
 
+    this.vacuumCanvas = document.getElementById('vacuum-canvas');
+    this.vacuumCtx = this.vacuumCanvas ? this.vacuumCanvas.getContext('2d') : null;
+    this.vacuumHeldFruitTier = null;
+
     // Layout boundaries (Expanded play area!)
     this.width = 520;
     this.height = 680;
@@ -64,20 +68,20 @@ class Game {
     this.joinedTeam = localStorage.getItem('planet_merge_joined_team') || null;
     this.lastGiftTime = parseInt(localStorage.getItem('planet_merge_last_gift') || '0', 10);
 
-    // In-game boosters: shrink (thu nhỏ), grow (phóng to), slow (làm chậm vòng quay), shuffle (xáo trộn)
+    // In-game boosters: vacuum (hút quả), grow (phóng to), slow (làm chậm vòng quay), shuffle (xáo trộn)
     this.boosterDefs = {
-      shrink:  { icon: '🔽', hint: 'Chạm 1 quả để THU NHỎ xuống 1 size', target: true },
+      vacuum:  { icon: '🌀', hint: 'Chạm 1 quả để HÚT ra ngoài, rồi tap HELD để thả', target: true },
       grow:    { icon: '🔼', hint: 'Chạm 1 quả để TĂNG size lên 1 bậc', target: true },
       slow:    { icon: '🐢', hint: '', target: false },
       shuffle: { icon: '🔀', hint: '', target: false }
     };
     this.boosters = {
-      shrink:  parseInt(localStorage.getItem('planet_merge_ib_shrink')  || '3', 10),
+      vacuum:  parseInt(localStorage.getItem('planet_merge_ib_vacuum')  || '3', 10),
       grow:    parseInt(localStorage.getItem('planet_merge_ib_grow')    || '3', 10),
       slow:    parseInt(localStorage.getItem('planet_merge_ib_slow')    || '3', 10),
       shuffle: parseInt(localStorage.getItem('planet_merge_ib_shuffle') || '3', 10)
     };
-    this.activeBooster = null; // type currently waiting for a fruit tap (shrink/grow)
+    this.activeBooster = null; // type currently waiting for a fruit tap (vacuum/grow)
     this.slowTimer = 0;        // ms remaining of the slow-orbit effect
 
     // Save defaults
@@ -202,11 +206,20 @@ class Game {
       });
     });
 
+    // Vacuum hold panel — tap to release the held fruit
+    const vacuumPanel = document.getElementById('vacuum-hold-panel');
+    if (vacuumPanel) {
+      vacuumPanel.addEventListener('click', () => {
+        if (this.state !== 'playing') return;
+        this._launchVacuumFruit();
+      });
+    }
+
     this.canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (this.state !== 'playing') return;
 
-      // If a targeting booster (shrink/grow) is armed, the tap selects a fruit instead of launching
+      // If a targeting booster (vacuum/grow) is armed, the tap selects a fruit instead of launching
       if (this.activeBooster) {
         const pt = this.getCanvasPoint(e);
         this.applyTargetBooster(pt.x, pt.y);
@@ -348,7 +361,9 @@ class Game {
 
       // Vẽ quả (sử dụng hàm vẽ vector của PhysicsEngine)
       this.physics.drawFruitBody(ctx, fx, fy, fr, i);
-      this.physics.drawFace(ctx, fx, fy, fr, false, 'normal', i);
+      if (i !== 1 && i !== 2 && i !== 3 && i !== 4 && i !== 5) {
+        this.physics.drawFace(ctx, fx, fy, fr, false, 'normal', i);
+      }
 
       // Vẽ mũi tên chỉ hướng tiến hóa tiếp theo
       if (i < 10) {
@@ -383,6 +398,8 @@ class Game {
     this.overflowTimer = 0;
     this.activeBooster = null;
     this.slowTimer = 0;
+    this.vacuumHeldFruitTier = null;
+    this.updateVacuumCanvas();
 
     const lvl = this.levelManager.getCurrentLevel();
     this.orbitRadius = lvl.orbitRadius || 295;
@@ -396,6 +413,28 @@ class Game {
     } else {
       this.physics.centers = [{ x: this.cx, y: this.cy }];
     }
+
+    // Black holes: hazard objects that destroy any fruit that touches them
+    if (lvl.blackHoles && lvl.blackHoles.length) {
+      this.physics.blackHoles = lvl.blackHoles.map(bh => ({
+        x: bh.x, y: bh.y, radius: bh.radius || 20
+      }));
+    } else {
+      this.physics.blackHoles = [];
+    }
+    this.physics._onAbsorb = (x, y) => {
+      this.particles.spawnBlackHoleAbsorption(x, y);
+    };
+
+    // Shrink zones: rectangular membranes that drop fruit tier by 1 on entry
+    if (lvl.shrinkZones && lvl.shrinkZones.length) {
+      this.physics.shrinkZones = lvl.shrinkZones.map(z => ({ x: z.x, y: z.y, width: z.width, height: z.height }));
+    } else {
+      this.physics.shrinkZones = [];
+    }
+    this.physics._onShrink = (body) => {
+      if (body.tier > 0) this.morphFruit(body, body.tier - 1);
+    };
 
     // Pre-placed fruits: seed the field with already-settled fruit defined by the level
     if (lvl.preplaced && lvl.preplaced.length) {
@@ -522,8 +561,61 @@ class Game {
     ctx.save();
     // Vẽ trực tiếp bằng hàm vector chính chủ để có đầy đủ hình dạng đặc thù (Strawberry teardrop, Grape cluster, stripes...)
     this.physics.drawFruitBody(ctx, 30, 30, r, this.nextFruitTier);
-    this.physics.drawFace(ctx, 30, 30, r, false, 'normal', this.nextFruitTier);
+    const _t = this.nextFruitTier;
+    if (_t !== 1 && _t !== 2 && _t !== 3 && _t !== 4 && _t !== 5) {
+      this.physics.drawFace(ctx, 30, 30, r, false, 'normal', _t);
+    }
     ctx.restore();
+  }
+
+  updateVacuumCanvas() {
+    const panel = document.getElementById('vacuum-hold-panel');
+    if (panel) panel.classList.toggle('has-fruit', this.vacuumHeldFruitTier !== null);
+
+    if (!this.vacuumCtx) return;
+    this.vacuumCtx.clearRect(0, 0, 60, 60);
+    if (this.vacuumHeldFruitTier !== null) {
+      const r = 12 + this.vacuumHeldFruitTier * 1.5;
+      this.vacuumCtx.save();
+      this.physics.drawFruitBody(this.vacuumCtx, 30, 30, r, this.vacuumHeldFruitTier);
+      const _t = this.vacuumHeldFruitTier;
+      if (_t !== 1 && _t !== 2 && _t !== 3 && _t !== 4 && _t !== 5) {
+        this.physics.drawFace(this.vacuumCtx, 30, 30, r, false, 'normal', _t);
+      }
+      this.vacuumCtx.restore();
+    }
+  }
+
+  _launchVacuumFruit() {
+    if (this.vacuumHeldFruitTier === null || this.launchCooldown) return;
+    this.launchCooldown = true;
+
+    const lx = this.cx + Math.cos(this.launcherAngle) * this.orbitRadius;
+    const ly = this.cy + Math.sin(this.launcherAngle) * this.orbitRadius;
+
+    const body = this.physics.addBody(lx, ly, this.vacuumHeldFruitTier);
+    body.deformVelX = -0.15;
+    body.deformVelY = 0.15;
+
+    const dx = this.cx - lx;
+    const dy = this.cy - ly;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
+    const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
+    const massFactor = 1 - (this.vacuumHeldFruitTier * 0.015);
+    const finalSpeed = speed * massFactor;
+    const vx = (dx / dist) * finalSpeed;
+    const vy = (dy / dist) * finalSpeed;
+    body.px = lx - vx;
+    body.py = ly - vy;
+
+    this.audio.playDrop && this.audio.playDrop();
+    if (navigator.vibrate) navigator.vibrate(10);
+
+    this.vacuumHeldFruitTier = null;
+    this.updateVacuumCanvas();
+
+    setTimeout(() => { this.launchCooldown = false; }, this.cooldownTime);
   }
 
   launchFruit() {
@@ -686,16 +778,30 @@ class Game {
     const body = this.getFruitAt(gx, gy);
     if (!body) return; // missed — keep targeting mode active so the player can retry
 
-    if (type === 'shrink') {
-      if (body.tier <= 0) {
-        // Cherry is already the smallest — nothing to shrink
+    if (type === 'vacuum') {
+      if (this.vacuumHeldFruitTier !== null) {
+        // Already holding a fruit — show hint
         this.floatingTexts.push({
-          x: body.x, y: body.y - 10, text: 'MIN SIZE',
+          x: body.x, y: body.y - 10, text: 'HELD FULL!',
           color: '#ff5e97', life: 1.0, scale: 0.08, vy: -1.6, rot: 0
         });
         return;
       }
-      this.morphFruit(body, body.tier - 1);
+      this.vacuumHeldFruitTier = body.tier;
+      const idx = this.physics.bodies.indexOf(body);
+      if (idx !== -1) this.physics.bodies.splice(idx, 1);
+      this.particles.spawnMergeEffect(body.x, body.y, '#9b51e0', 10);
+      this.audio.playDrop && this.audio.playDrop();
+      if (navigator.vibrate) navigator.vibrate(20);
+      this.floatingTexts.push({
+        x: body.x, y: body.y - 10, text: '🌀 HELD!',
+        color: '#9b51e0', life: 1.0, scale: 0.08, vy: -1.6, rot: 0
+      });
+      this.consumeBooster(type);
+      this.activeBooster = null;
+      this.refreshBoosterUI();
+      this.updateVacuumCanvas();
+      return;
     } else if (type === 'grow') {
       if (body.tier >= FRUIT_CONFIGS.length - 1) {
         // Watermelon is already the largest — nothing to grow
@@ -938,7 +1044,23 @@ class Game {
     this.audio.playWin();
     if (navigator.vibrate) navigator.vibrate([50, 50, 50, 50, 100]); // Celebrate!
 
-    // Stars earned are decided by the score thresholds; fruit goals were the base pass requirement
+    // Bonus score from remaining shots before calculating stars
+    const lvl = this.levelManager.getCurrentLevel();
+    const shotMultiplier = lvl.shotBonusMultiplier !== undefined ? lvl.shotBonusMultiplier : 15;
+    const remainingShots = Math.max(0, this.levelManager.remainingSpawns || 0);
+    const shotBonus = remainingShots * shotMultiplier;
+
+    if (shotBonus > 0) {
+      this.score += shotBonus;
+      document.getElementById('score-display').innerText = this.score;
+      this.floatingTexts.push({
+        x: this.cx, y: this.cy - 50,
+        text: `✨ +${shotBonus} SHOT BONUS!`,
+        color: '#ffd700', life: 2.5, scale: 0.09, vy: -1.8, rot: 0
+      });
+    }
+
+    // Stars earned are decided by the score thresholds (after bonus); fruit goals were the base pass requirement
     const idx = this.levelManager.currentLevelIndex;
     const earnedStars = this.levelManager.getStars(this.score);
     const gainedStars = this.levelManager.recordStars(idx, earnedStars); // only the improvement over best
@@ -955,6 +1077,18 @@ class Game {
 
     this.renderVictoryStars(earnedStars);
     document.getElementById('victory-score').innerText = this.score;
+
+    // Show shot bonus breakdown in victory screen
+    const bonusRow = document.getElementById('victory-bonus-row');
+    const bonusEl = document.getElementById('victory-bonus');
+    if (bonusRow && bonusEl) {
+      if (shotBonus > 0) {
+        bonusEl.textContent = `+${shotBonus} (${remainingShots} × ${shotMultiplier})`;
+        bonusRow.style.display = '';
+      } else {
+        bonusRow.style.display = 'none';
+      }
+    }
 
     // Chờ hết tất cả merge animations rồi mới hiện popup (tracked in update())
     this._pendingVictory = true;
@@ -1154,6 +1288,8 @@ class Game {
 
     this.drawOrbitGuidelines(ctx);
     this.drawPlanetCore(ctx);
+    this.drawBlackHoles(ctx);
+    this.drawShrinkZones(ctx);
     this.physics.draw(ctx);
     this.particles.draw(ctx);
     this.drawFloatingTexts(ctx);
@@ -1168,13 +1304,6 @@ class Game {
 
   drawOrbitGuidelines(ctx) {
     ctx.save();
-
-    // Orbit path ring — the circular border the launcher rotates along
-    ctx.strokeStyle = 'rgba(155, 81, 224, 0.22)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(this.cx, this.cy, this.orbitRadius, 0, Math.PI * 2);
-    ctx.stroke();
 
     // Warning boundary line (dashed pink ring) — one per gravity well
     if (this.isOverflowing) {
@@ -1198,6 +1327,94 @@ class Game {
   drawPlanetCore(ctx) {
     for (const c of this.physics.centers) {
       this.drawCoreAt(ctx, c.x, c.y);
+    }
+  }
+
+  drawBlackHoles(ctx) {
+    if (!this.physics.blackHoles || !this.physics.blackHoles.length) return;
+    const time = performance.now();
+    for (const bh of this.physics.blackHoles) {
+      ctx.save();
+
+      // Outer glow halo
+      const pulseR = bh.radius * 2.8 + Math.sin(time / 220) * 3;
+      const outerGlow = ctx.createRadialGradient(bh.x, bh.y, bh.radius * 0.5, bh.x, bh.y, pulseR);
+      outerGlow.addColorStop(0, 'rgba(108, 52, 131, 0.55)');
+      outerGlow.addColorStop(0.4, 'rgba(26, 5, 51, 0.28)');
+      outerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = outerGlow;
+      ctx.beginPath();
+      ctx.arc(bh.x, bh.y, pulseR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rotating dashed event-horizon ring
+      ctx.save();
+      ctx.translate(bh.x, bh.y);
+      ctx.rotate((time / 600) % (Math.PI * 2));
+      ctx.strokeStyle = 'rgba(180, 100, 220, 0.55)';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([4, 7]);
+      ctx.beginPath();
+      ctx.arc(0, 0, bh.radius * 1.55, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // Black core
+      ctx.shadowColor = 'rgba(108, 52, 131, 0.9)';
+      ctx.shadowBlur = 14;
+      const coreGrad = ctx.createRadialGradient(
+        bh.x - bh.radius * 0.28, bh.y - bh.radius * 0.28, 1,
+        bh.x, bh.y, bh.radius
+      );
+      coreGrad.addColorStop(0, '#1a0030');
+      coreGrad.addColorStop(0.6, '#0d001a');
+      coreGrad.addColorStop(1, '#000000');
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.arc(bh.x, bh.y, bh.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Specular highlight
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(200, 140, 255, 0.30)';
+      ctx.beginPath();
+      ctx.arc(bh.x - bh.radius * 0.32, bh.y - bh.radius * 0.32, bh.radius * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  drawShrinkZones(ctx) {
+    if (!this.physics.shrinkZones || !this.physics.shrinkZones.length) return;
+    const time = performance.now();
+    for (const zone of this.physics.shrinkZones) {
+      ctx.save();
+      const shimmer = Math.sin(time / 350) * 0.15 + 0.5;
+
+      // Glow border
+      ctx.shadowColor = 'rgba(0, 220, 255, 0.9)';
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = `rgba(0, 220, 255, ${shimmer + 0.2})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 5]);
+      ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+      ctx.setLineDash([]);
+
+      // Translucent fill
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = `rgba(0, 200, 255, ${shimmer * 0.12})`;
+      ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+
+      // Label
+      ctx.font = 'bold 9px sans-serif';
+      ctx.fillStyle = `rgba(120, 230, 255, 0.85)`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('▼ SHRINK ▼', zone.x + zone.width / 2, zone.y + zone.height / 2);
+
+      ctx.restore();
     }
   }
 
@@ -1288,7 +1505,10 @@ class Game {
 
     // Draw the fruit directly at lx, ly since there is no spaceship (drawn upright)
     this.physics.drawFruitBody(ctx, lx, ly, config.r, this.currentFruitTier, 0);
-    this.physics.drawFace(ctx, lx, ly, config.r, false, 'normal', this.currentFruitTier);
+    const _ct = this.currentFruitTier;
+    if (_ct !== 1 && _ct !== 2 && _ct !== 3 && _ct !== 4 && _ct !== 5) {
+      this.physics.drawFace(ctx, lx, ly, config.r, false, 'normal', _ct);
+    }
 
     ctx.restore();
   }
@@ -1471,7 +1691,6 @@ class Game {
       ctx.translate(ax, ay);
       ctx.scale(scale, scale);
       this.physics.drawFruitBody(ctx, 0, 0, 11, 1);
-      this.physics.drawFace(ctx, 0, 0, 11, false, 'normal', 1);
       ctx.restore();
     }
 

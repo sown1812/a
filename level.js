@@ -147,6 +147,54 @@ class LevelManager {
         goals: [
           { type: 'fruit', target: 3, count: 2, current: 0 }
         ]
+      },
+      {
+        id: 8,
+        name: "Void Gravity",
+        description: "A black hole lurks above the core. Fruits that touch it vanish forever!",
+        maxSpawnTier: 4,
+        orbitRadius: 248,
+        warningLimit: 130,
+        launcherSpeed: 1.0,
+        maxSpawns: 40,
+        centers: [
+          { x: 260, y: 340 }
+        ],
+        blackHoles: [
+          { x: 260, y: 250, radius: 20 }
+        ],
+        preplaced: [
+          { tier: 0, x: 244, y: 330 },
+          { tier: 0, x: 276, y: 330 },
+          { tier: 1, x: 260, y: 358 }
+        ],
+        starScores: [500, 1000, 1800],
+        goals: [
+          { type: 'fruit', target: 6, count: 1, current: 0 },
+          { type: 'fruit', target: 3, count: 3, current: 0 }
+        ]
+      },
+      {
+        id: 9,
+        name: "Shrink Membrane",
+        description: "A membrane cuts across the field. Fruits passing through drop 1 tier!",
+        maxSpawnTier: 5,
+        orbitRadius: 248,
+        warningLimit: 200,
+        launcherSpeed: 1.1,
+        maxSpawns: 55,
+        centers: [
+          { x: 260, y: 360 }
+        ],
+        // Tấm màng nằm ngang, cách core ~65px phía trên — fruits rơi từ trên xuống bắt buộc đi qua
+        shrinkZones: [
+          { x: 100, y: 200, width: 150, height: 20 }
+        ],
+        starScores: [600, 1200, 2000],
+        goals: [
+          { type: 'fruit', target: 7, count: 1, current: 0 },
+          { type: 'fruit', target: 4, count: 2, current: 0 }
+        ]
       }
     ];
 
