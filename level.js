@@ -39,8 +39,9 @@ class LevelManager {
         warningLimit: 122, // Giảm 30% (175 -> 122)
         launcherSpeed: 0.65, // Tốc độ quay phi thuyền chậm để dễ ngắm bắn
         maxSpawns: 18, // Giới hạn số quả được sinh ra ở màn 1
+        starScores: [150, 350, 600], // Mốc điểm cho 1★ / 2★ / 3★
         goals: [
-          { type: 'fruit', target: 3, count: 1, current: 0 } // Đạt được 1 quả Cam/Quýt (Tier 3) để thắng
+          { type: 'fruit', target: 3, count: 1, current: 0 } // Base: tạo 1 quả Cam/Quýt (Tier 3) để qua màn
         ]
       },
       {
@@ -52,6 +53,7 @@ class LevelManager {
         warningLimit: 165,
         launcherSpeed: 0.95,
         maxSpawns: 15,
+        starScores: [400, 800, 1300],
         goals: [
           { type: 'fruit', target: 2, count: 2, current: 0 },
           { type: 'fruit', target: 4, count: 1, current: 0 }
@@ -66,6 +68,7 @@ class LevelManager {
         warningLimit: 200,
         launcherSpeed: 1.05,
         maxSpawns: 25,
+        starScores: [700, 1400, 2200],
         goals: [
           { type: 'fruit', target: 5, count: 1, current: 0 }
         ]
@@ -79,8 +82,8 @@ class LevelManager {
         warningLimit: 200,
         launcherSpeed: 1.15,
         maxSpawns: 40,
+        starScores: [1000, 1800, 2800],
         goals: [
-          { type: 'score', target: 1500, current: 0 },
           { type: 'fruit', target: 8, count: 1, current: 0 }
         ]
       },
@@ -93,6 +96,7 @@ class LevelManager {
         warningLimit: 200,
         launcherSpeed: 1.25,
         maxSpawns: 50,
+        starScores: [1500, 2800, 4500],
         goals: [
           { type: 'fruit', target: 9, count: 1, current: 0 },
           { type: 'fruit', target: 1, count: 8, current: 0 }
@@ -107,6 +111,7 @@ class LevelManager {
         warningLimit: 200,
         launcherSpeed: 1.35,
         maxSpawns: 75,
+        starScores: [2500, 5000, 8000],
         goals: [
           { type: 'fruit', target: 10, count: 1, current: 0 }
         ]
@@ -136,8 +141,8 @@ class LevelManager {
           // Bottom-right well
           { tier: 2, x: 365, y: 395 }, { tier: 0, x: 389, y: 395 }, { tier: 0, x: 377, y: 421 }
         ],
+        starScores: [800, 1500, 2500],
         goals: [
-          { type: 'score', target: 1200, current: 0 },
           { type: 'fruit', target: 3, count: 2, current: 0 }
         ]
       }
@@ -146,10 +151,38 @@ class LevelManager {
     // Unlock every level for the player
     this.unlockedLevelIndex = this.levels.length - 1;
     localStorage.setItem('planet_merge_unlocked_level', this.unlockedLevelIndex.toString());
+
+    // Best star rating earned per level index, e.g. { "0": 3, "1": 2 }
+    this.bestStars = JSON.parse(localStorage.getItem('planet_merge_best_stars') || '{}');
   }
 
   getCurrentLevel() {
     return this.levels[this.currentLevelIndex];
+  }
+
+  // How many stars a given score earns on a level (0–3), based on its starScores thresholds
+  getStars(score, lvl = this.getCurrentLevel()) {
+    if (!lvl || !lvl.starScores) return 0;
+    let stars = 0;
+    for (const threshold of lvl.starScores) {
+      if (score >= threshold) stars++;
+    }
+    return Math.min(3, stars);
+  }
+
+  getBestStars(idx) {
+    return this.bestStars[idx] || 0;
+  }
+
+  // Persist the best (highest) star rating for a level; returns the improvement over previous best
+  recordStars(idx, stars) {
+    const prev = this.bestStars[idx] || 0;
+    const gained = Math.max(0, stars - prev);
+    if (stars > prev) {
+      this.bestStars[idx] = stars;
+      localStorage.setItem('planet_merge_best_stars', JSON.stringify(this.bestStars));
+    }
+    return gained;
   }
 
   resetCurrentGoals() {

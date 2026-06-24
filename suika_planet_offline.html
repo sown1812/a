@@ -350,6 +350,58 @@ body {
 }
 .booster-hint.hidden { display: none; }
 
+/* HUD live star tracker (under SCORE) — fills as score crosses thresholds */
+.star-track {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+  line-height: 1;
+}
+.star-track .star {
+  font-size: 11px;
+  color: rgba(125, 110, 157, 0.3);
+  transition: color 0.3s ease, transform 0.3s ease;
+}
+.star-track .star.filled {
+  color: #ffc83d;
+  text-shadow: 0 0 6px rgba(255, 200, 61, 0.6);
+  transform: scale(1.15);
+}
+
+/* Victory screen earned-stars row */
+.victory-stars {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 6px 0 14px;
+}
+.victory-stars .vstar {
+  font-size: 44px;
+  color: rgba(125, 110, 157, 0.25);
+  transition: color 0.3s ease;
+}
+.victory-stars .vstar.earned {
+  color: #ffc83d;
+  text-shadow: 0 0 14px rgba(255, 200, 61, 0.7);
+  animation: starPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+.victory-stars .vstar.earned:nth-child(2) { animation-delay: 0.12s; }
+.victory-stars .vstar.earned:nth-child(3) { animation-delay: 0.24s; }
+@keyframes starPop {
+  0%   { transform: scale(0) rotate(-30deg); }
+  70%  { transform: scale(1.3) rotate(8deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+/* Level-select grid star rating */
+.level-stars {
+  font-size: 11px;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+.level-stars .on { color: #ffc83d; }
+.level-stars .off { color: rgba(125, 110, 157, 0.3); }
+
 /* Warning Screen for game over countdown */
 .warning-overlay {
   position: absolute;
@@ -1710,9 +1762,12 @@ body {
       <div class="hud-item score-info">
         <span class="label">SCORE</span>
         <span id="score-display" class="value">0</span>
+        <div id="star-track" class="star-track">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+        </div>
       </div>
       <div class="hud-item spawn-info">
-        <span class="label">SPAWNS</span>
+        <span class="label">SHOTS</span>
         <span id="spawn-display" class="value">0</span>
       </div>
       <div class="hud-item goal-info">
@@ -1839,6 +1894,11 @@ body {
         <div class="victory-icon">&#x1F389;</div>
         <h2 class="victory-title">VICTORY!</h2>
         <p class="victory-subtitle">You cleared the level!</p>
+        <div id="victory-stars" class="victory-stars">
+          <span class="vstar">&#x2605;</span>
+          <span class="vstar">&#x2605;</span>
+          <span class="vstar">&#x2605;</span>
+        </div>
         <div class="stats-box">
           <div class="stat-row">
             <span>Score achieved:</span>
@@ -2489,8 +2549,9 @@ class LevelManager {
         warningLimit: 122, // Giảm 30% (175 -> 122)
         launcherSpeed: 0.65, // Tốc độ quay phi thuyền chậm để dễ ngắm bắn
         maxSpawns: 18, // Giới hạn số quả được sinh ra ở màn 1
+        starScores: [150, 350, 600], // Mốc điểm cho 1★ / 2★ / 3★
         goals: [
-          { type: 'fruit', target: 3, count: 1, current: 0 } // Đạt được 1 quả Cam/Quýt (Tier 3) để thắng
+          { type: 'fruit', target: 3, count: 1, current: 0 } // Base: tạo 1 quả Cam/Quýt (Tier 3) để qua màn
         ]
       },
       {
@@ -2502,6 +2563,7 @@ class LevelManager {
         warningLimit: 165,
         launcherSpeed: 0.95,
         maxSpawns: 15,
+        starScores: [400, 800, 1300],
         goals: [
           { type: 'fruit', target: 2, count: 2, current: 0 },
           { type: 'fruit', target: 4, count: 1, current: 0 }
@@ -2516,6 +2578,7 @@ class LevelManager {
         warningLimit: 200,
         launcherSpeed: 1.05,
         maxSpawns: 25,
+        starScores: [700, 1400, 2200],
         goals: [
           { type: 'fruit', target: 5, count: 1, current: 0 }
         ]
@@ -2529,8 +2592,8 @@ class LevelManager {
         warningLimit: 200,
         launcherSpeed: 1.15,
         maxSpawns: 40,
+        starScores: [1000, 1800, 2800],
         goals: [
-          { type: 'score', target: 1500, current: 0 },
           { type: 'fruit', target: 8, count: 1, current: 0 }
         ]
       },
@@ -2543,6 +2606,7 @@ class LevelManager {
         warningLimit: 200,
         launcherSpeed: 1.25,
         maxSpawns: 50,
+        starScores: [1500, 2800, 4500],
         goals: [
           { type: 'fruit', target: 9, count: 1, current: 0 },
           { type: 'fruit', target: 1, count: 8, current: 0 }
@@ -2557,6 +2621,7 @@ class LevelManager {
         warningLimit: 200,
         launcherSpeed: 1.35,
         maxSpawns: 75,
+        starScores: [2500, 5000, 8000],
         goals: [
           { type: 'fruit', target: 10, count: 1, current: 0 }
         ]
@@ -2586,8 +2651,8 @@ class LevelManager {
           // Bottom-right well
           { tier: 2, x: 365, y: 395 }, { tier: 0, x: 389, y: 395 }, { tier: 0, x: 377, y: 421 }
         ],
+        starScores: [800, 1500, 2500],
         goals: [
-          { type: 'score', target: 1200, current: 0 },
           { type: 'fruit', target: 3, count: 2, current: 0 }
         ]
       }
@@ -2596,10 +2661,38 @@ class LevelManager {
     // Unlock every level for the player
     this.unlockedLevelIndex = this.levels.length - 1;
     localStorage.setItem('planet_merge_unlocked_level', this.unlockedLevelIndex.toString());
+
+    // Best star rating earned per level index, e.g. { "0": 3, "1": 2 }
+    this.bestStars = JSON.parse(localStorage.getItem('planet_merge_best_stars') || '{}');
   }
 
   getCurrentLevel() {
     return this.levels[this.currentLevelIndex];
+  }
+
+  // How many stars a given score earns on a level (0–3), based on its starScores thresholds
+  getStars(score, lvl = this.getCurrentLevel()) {
+    if (!lvl || !lvl.starScores) return 0;
+    let stars = 0;
+    for (const threshold of lvl.starScores) {
+      if (score >= threshold) stars++;
+    }
+    return Math.min(3, stars);
+  }
+
+  getBestStars(idx) {
+    return this.bestStars[idx] || 0;
+  }
+
+  // Persist the best (highest) star rating for a level; returns the improvement over previous best
+  recordStars(idx, stars) {
+    const prev = this.bestStars[idx] || 0;
+    const gained = Math.max(0, stars - prev);
+    if (stars > prev) {
+      this.bestStars[idx] = stars;
+      localStorage.setItem('planet_merge_best_stars', JSON.stringify(this.bestStars));
+    }
+    return gained;
   }
 
   resetCurrentGoals() {
@@ -4835,8 +4928,11 @@ class Game {
       card.className = `level-item ${isUnlocked ? 'unlocked' : 'locked'} ${isCompleted ? 'completed' : ''}`;
 
       if (isUnlocked) {
+        const best = this.levelManager.getBestStars(idx);
+        const starHtml = `<span class="on">${'★'.repeat(best)}</span><span class="off">${'★'.repeat(3 - best)}</span>`;
         card.innerHTML = `
           <div class="level-num">${lvl.id}</div>
+          <div class="level-stars">${starHtml}</div>
           <div class="level-status">${isCompleted ? '⭐ CLEAR' : '🔓 PLAY'}</div>
         `;
         card.addEventListener('click', () => {
@@ -4958,6 +5054,7 @@ class Game {
 
     this.updateHUDGoals();
     this.updateHUDSpawns();
+    this.updateStarTrack();
     this.updatePreviewCanvas();
     this.drawEvolutionCircle();
     this.showScreen('none');
@@ -5018,6 +5115,23 @@ class Game {
         el.style.textShadow = '';
       }
     }
+  }
+
+  // Live HUD stars: fill based on how many score thresholds the current score has crossed
+  updateStarTrack() {
+    const cont = document.getElementById('star-track');
+    if (!cont) return;
+    const stars = this.levelManager.getStars(this.score);
+    const els = cont.querySelectorAll('.star');
+    els.forEach((el, i) => el.classList.toggle('filled', i < stars));
+  }
+
+  // Victory screen: light up the stars the player earned
+  renderVictoryStars(stars) {
+    const cont = document.getElementById('victory-stars');
+    if (!cont) return;
+    const els = cont.querySelectorAll('.vstar');
+    els.forEach((el, i) => el.classList.toggle('earned', i < stars));
   }
 
   updatePreviewCanvas() {
@@ -5249,32 +5363,42 @@ class Game {
     if (navigator.vibrate) navigator.vibrate(12);
   }
 
-  // Booster 4: shuffle every settled fruit to a new random spot inside the circle
+  // Booster 4: blast every fruit into a chaotic tumble — they fly around, then the wells pull them back
   shuffleFruits() {
     const movable = this.physics.bodies.filter(b => !b.merged);
     if (movable.length === 0) return;
 
     for (const b of movable) {
-      const maxR = Math.max(0, this.warningLimit - b.r - 4);
-      const angle = Math.random() * Math.PI * 2;
-      const radius = Math.sqrt(Math.random()) * maxR; // uniform area distribution
-      const nx = this.cx + Math.cos(angle) * radius;
-      const ny = this.cy + Math.sin(angle) * radius;
-      b.x = nx;
-      b.y = ny;
-      b.px = nx; // zero out velocity so they settle from the new spot
-      b.py = ny;
-      b.isSettled = true;
-      b.scale = Math.max(0.6, b.scale);
-      b.targetScale = 1.0;
-      b.deformVelX = (Math.random() - 0.5) * 0.3;
-      b.deformVelY = (Math.random() - 0.5) * 0.3;
+      // Release the fruit so the physics engine can fling it around
+      b.isSettled = false;
+      b.growthPhase = false;
+
+      // Strong random impulse — encoded as a previous-position offset for Verlet integration
+      const ang = Math.random() * Math.PI * 2;
+      const speed = 3 + Math.random() * 4.5;
+      b.px = b.x - Math.cos(ang) * speed;
+      b.py = b.y - Math.sin(ang) * speed;
+
+      // Temporary fast tumble + jelly wobble for chaos; restore the gentle idle spin afterwards
+      const origSpin = b.idleSpin;
+      b.idleSpin = (Math.random() - 0.5) * 0.35;
+      b.deformVelX = (Math.random() - 0.5) * 0.7;
+      b.deformVelY = (Math.random() - 0.5) * 0.7;
+      b.expression = 'surprised';
+      b.expressionTimer = 70;
+      setTimeout(() => { b.idleSpin = origSpin; }, 1500);
+
+      // Small juice burst at each fruit
+      this.particles.spawnMergeEffect(b.x, b.y, FRUIT_CONFIGS[b.tier].color, 6);
     }
 
     this.consumeBooster('shuffle');
-    this.particles.spawnMergeEffect(this.cx, this.cy, '#9b51e0', 20);
+    this.floatingTexts.push({
+      x: this.cx, y: this.cy - 40, text: '🔀 SHUFFLE!',
+      color: '#9b51e0', life: 1.3, scale: 0.08, vy: -2.0, rot: 0
+    });
     this.audio.playDrop && this.audio.playDrop();
-    if (navigator.vibrate) navigator.vibrate([12, 20, 12]);
+    if (navigator.vibrate) navigator.vibrate([15, 30, 15, 30, 15]);
   }
 
   addScore(points, x = this.cx, y = this.cy, color = '#ff5e97', showFloatingText = true) {
@@ -5282,6 +5406,7 @@ class Game {
     document.getElementById('score-display').innerText = this.score;
     this.levelManager.trackScore(this.score);
     this.updateHUDGoals();
+    this.updateStarTrack();
 
     if (showFloatingText) {
       this.floatingTexts.push({
@@ -5433,17 +5558,22 @@ class Game {
     this.audio.playWin();
     if (navigator.vibrate) navigator.vibrate([50, 50, 50, 50, 100]); // Celebrate!
 
-    // Reward coins and stars
-    const rewardCoins = 50 + this.levelManager.currentLevelIndex * 20;
-    const rewardStars = 3;
+    // Stars earned are decided by the score thresholds; fruit goals were the base pass requirement
+    const idx = this.levelManager.currentLevelIndex;
+    const earnedStars = this.levelManager.getStars(this.score);
+    const gainedStars = this.levelManager.recordStars(idx, earnedStars); // only the improvement over best
+
+    // Reward coins and stars (star currency reflects the sum of best ratings)
+    const rewardCoins = 50 + idx * 20;
     this.coins += rewardCoins;
-    this.stars += rewardStars;
+    this.stars += gainedStars;
     localStorage.setItem('planet_merge_coins', this.coins);
     localStorage.setItem('planet_merge_stars', this.stars);
 
     this.particles.spawnConfetti(this.cx, this.width);
     this.particles.spawnConfetti(this.cx, this.width);
 
+    this.renderVictoryStars(earnedStars);
     document.getElementById('victory-score').innerText = this.score;
 
     // Chờ hết tất cả merge animations rồi mới hiện popup (tracked in update())
