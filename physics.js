@@ -1,21 +1,38 @@
 /**
  * Planet Suika - Verlet Physics Engine (Squash & Stretch Springs & Fruit Drawing)
  */
+
+// =====================================================
+// GAME MODE: 'fruit' = original fruit art, 'custom' = face photos
+// =====================================================
+let GAME_MODE = localStorage.getItem('planet_merge_game_mode') || 'fruit';
+
+// =====================================================
+// THAY ANH TUY CHINH O DAY
+// Dat file anh cung thu muc voi index.html
+// De trong '' = dung hoa qua goc cho tier do
+// =====================================================
+const CUSTOM_IMAGE_PATHS = [
+  'Phong.png',   // Tier 0 (qua nho nhat)
+  'Ngoc.png',    // Tier 1
+  'Me.png',   // Tier 2 
+  'Huy.png',     // Tier 3
+  'Giang.png',   // Tier 4
+  'Thai.png',     // Tier 5
+  'A Tuan Anh.png',  // Tier 6
+  'C Phuong.png',   // Tier 7
+  'tier4.jpg',            // Tier 8 (de trong)
+  'C bac.png',            // Tier 9 (de trong)
+  'A linh.png',            // Tier 10 (qua lon nhat - de trong)
+];
+
 const _mckImage = new Image();
 _mckImage.src = 'mck.png';
 
-const _tier4Image = new Image();
-_tier4Image.src = 'tier4.jpg';
-const _tier3Image = new Image();
-_tier3Image.src = 'thai.png';
-const _tier2Image = new Image();
-_tier2Image.src = 'giang.png';
-const _tier1Image = new Image();
-_tier1Image.src = 'phong.png';
-const _tier5Image = new Image();
-_tier5Image.src = 'Huy.png';
-const _tier10Image = new Image();
-_tier10Image.src = 'A linh.png';
+const _customImages = [];
+CUSTOM_IMAGE_PATHS.forEach((path, i) => {
+  if (path) { _customImages[i] = new Image(); _customImages[i].src = path; }
+});
 
 // Render a face photo cropped to the fruit's circle.
 // Uses object-fit:cover semantics (shorter dimension fills diameter) and
@@ -46,6 +63,7 @@ class PhysicsEngine {
     this.centers = [{ x: cx, y: cy }];
     this.blackHoles = []; // Mỗi entry: { x, y, radius } — hút và hủy fruit
     this.shrinkZones = []; // Mỗi entry: { x, y, width, height } — giảm tier 1 bậc khi đi qua
+    this.portalPairs = []; // Mỗi entry: [portalA, portalB] — teleport fruit, redirect về core
     this.bodies = [];
     this.gravity = 0.038; // Tăng trọng lực để nẩy nhanh dứt khoát
     this.damping = 0.985; // Tăng quán tính (bớt ma sát không khí) để quả bay lướt mượt mà hơn
@@ -353,6 +371,50 @@ class PhysicsEngine {
     }
     // ── End Shrink Zone Check ──────────────────────────────────────────────
 
+    // ── Portal Check ───────────────────────────────────────────────────────
+    // Khi fruit center đi vào 1 trong 2 portal của cặp → teleport sang portal kia,
+    // redirect velocity về gravity core (giữ tốc độ). portalCooldown ngăn ping-pong.
+    if (this.portalPairs && this.portalPairs.length > 0) {
+      for (const b of this.bodies) {
+        if (b.portalCooldown > 0) { b.portalCooldown -= dt; continue; }
+        for (const pair of this.portalPairs) {
+          for (let pi = 0; pi < 2; pi++) {
+            const entry = pair[pi];
+            const exit  = pair[1 - pi];
+            if (b.x >= entry.x && b.x <= entry.x + entry.width &&
+                b.y >= entry.y && b.y <= entry.y + entry.height) {
+              // Tính tốc độ hiện tại (Verlet: v = pos - prevPos)
+              const vx = b.x - b.px;
+              const vy = b.y - b.py;
+              const speed = Math.sqrt(vx * vx + vy * vy) || 2;
+
+              // Teleport sang center của exit portal
+              const ex = exit.x + exit.width  / 2;
+              const ey = exit.y + exit.height / 2;
+              b.x  = ex;
+              b.y  = ey;
+
+              // Hướng velocity vào gravity core gần nhất
+              const core = this.getNearestCenter(ex, ey);
+              const ddx = core.x - ex;
+              const ddy = core.y - ey;
+              const dlen = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+              b.px = b.x - (ddx / dlen) * speed;
+              b.py = b.y - (ddy / dlen) * speed;
+
+              b.isSettled = false;
+              b.portalCooldown = 20; // ~0.33s buffer
+              b.expression = 'surprised';
+              b.expressionTimer = 35;
+              if (this._onPortal) this._onPortal(ex, ey);
+              break;
+            }
+          }
+        }
+      }
+    }
+    // ── End Portal Check ───────────────────────────────────────────────────
+
     // 2. Resolve Constraints & Collisions
     const iterations = this.isPerfMode ? 5 : 8;
     const mergesToProcess = [];
@@ -459,8 +521,14 @@ class PhysicsEngine {
               }
             }
 
-            // Merge detection on final iteration (skip if either fruit still has spawn protection)
-            if (step === iterations - 1) {
+          }
+
+          // Merge zone: slightly larger than collision radius so fruits feel responsive
+          // even when visually just touching (not overlapping in physics)
+          if (step === iterations - 1) {
+            const MERGE_TOLERANCE = 5;
+            const mergeDist = r1 + r2 + MERGE_TOLERANCE;
+            if (distSq < mergeDist * mergeDist) {
               if (b1.tier === b2.tier && !b1.merged && !b2.merged &&
                   !(b1.mergeDelayFrames > 0) && !(b2.mergeDelayFrames > 0)) {
                 b1.merged = true;
@@ -533,8 +601,9 @@ class PhysicsEngine {
       ctx.rotate(b.angle || 0);
       
       this.drawFruitBody(ctx, 0, 0, b.r, b.tier, b.angle || 0);
-      
-      if (b.r > 5 && b.tier !== 10 && b.tier !== 5 && b.tier !== 4 && b.tier !== 3 && b.tier !== 2 && b.tier !== 1) {
+
+      const _isCustomPhoto = GAME_MODE === 'custom' && _customImages[b.tier];
+      if (!_isCustomPhoto && b.r > 5 && b.tier !== 10 && b.tier !== 5 && b.tier !== 4 && b.tier !== 3 && b.tier !== 2 && b.tier !== 1) {
         this.drawFace(ctx, 0, 0, b.r, b.blinking, b.expression, b.tier);
       }
       
@@ -598,13 +667,12 @@ class PhysicsEngine {
       }
     }
 
-    // Face photo overrides for tiers 2, 3, 4
-    if (tier === 10) { _drawFaceCircle(ctx, _tier10Image, x, y, r, angle, '#10ac84'); ctx.restore(); return; }
-    if (tier === 5) { _drawFaceCircle(ctx, _tier5Image, x, y, r, angle, '#d63031'); ctx.restore(); return; }
-    if (tier === 4) { _drawFaceCircle(ctx, _tier4Image, x, y, r, angle, '#ff5e36'); ctx.restore(); return; }
-    if (tier === 3) { _drawFaceCircle(ctx, _tier3Image, x, y, r, angle, '#ffa502'); ctx.restore(); return; }
-    if (tier === 2) { _drawFaceCircle(ctx, _tier2Image, x, y, r, angle, '#8c46ff'); ctx.restore(); return; }
-    if (tier === 1) { _drawFaceCircle(ctx, _tier1Image, x, y, r, angle, '#ff527b'); ctx.restore(); return; }
+    // Face photo overrides (Custom mode only)
+    if (GAME_MODE === 'custom' && _customImages[tier]) {
+      _drawFaceCircle(ctx, _customImages[tier], x, y, r, angle, FRUIT_CONFIGS[tier].color);
+      ctx.restore();
+      return;
+    }
 
     // Special rendering for Grape (tier 2) to look extremely cute, premium and bubbly
     if (tier === 2) {
@@ -703,8 +771,8 @@ class PhysicsEngine {
       return;
     }
 
-    // Special rendering for tier 5 (Apple): draw mck.png image clipped to circle
-    if (tier === 5) {
+    // Special rendering for tier 5 (Apple): draw mck.png image clipped to circle (Custom mode only)
+    if (GAME_MODE === 'custom' && tier === 5) {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.clip();

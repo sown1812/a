@@ -49,7 +49,7 @@ class Game {
     this.currentFruitTier = 0;
     this.nextFruitTier = 0;
     this.launchCooldown = false;
-    this.cooldownTime = 750; // Tăng delay từ 350ms lên 750ms để tránh user spam bắn quả liên tục
+    this.cooldownTime = 600; // Tăng delay từ 350ms lên 750ms để tránh user spam bắn quả liên tục
 
     this.overflowTimer = 0;
     this.overflowDuration = 3.0;
@@ -118,6 +118,37 @@ class Game {
       this.audio.playClick();
       this.showScreen('level-screen');
       this.renderLevelGrid();
+    });
+
+    document.getElementById('tutorial-btn').addEventListener('click', () => {
+      this.audio.playClick();
+      this.startTutorial();
+    });
+
+    document.getElementById('tutorial-done-btn').addEventListener('click', () => {
+      this.audio.playClick();
+      this.endTutorial();
+    });
+
+    // Mode toggle buttons
+    const _updateModeButtons = () => {
+      const fBtn = document.getElementById('mode-fruit-btn');
+      const cBtn = document.getElementById('mode-custom-btn');
+      if (fBtn) fBtn.classList.toggle('active', GAME_MODE === 'fruit');
+      if (cBtn) cBtn.classList.toggle('active', GAME_MODE === 'custom');
+    };
+    _updateModeButtons();
+    document.getElementById('mode-fruit-btn')?.addEventListener('click', () => {
+      this.audio.playClick();
+      GAME_MODE = 'fruit';
+      localStorage.setItem('planet_merge_game_mode', 'fruit');
+      _updateModeButtons();
+    });
+    document.getElementById('mode-custom-btn')?.addEventListener('click', () => {
+      this.audio.playClick();
+      GAME_MODE = 'custom';
+      localStorage.setItem('planet_merge_game_mode', 'custom');
+      _updateModeButtons();
     });
 
     document.getElementById('level-back-btn').addEventListener('click', () => {
@@ -359,11 +390,14 @@ class Game {
       const fx = 14 + i * spacing;
       const fr = 8 + i * 0.7; // Tăng dần nhẹ kích thước quả từ 8 -> 15 để trông có tiến trình
 
-      // Vẽ quả (sử dụng hàm vẽ vector của PhysicsEngine)
+      // Evolution bar always shows original fruit art regardless of game mode
+      const _savedMode = GAME_MODE;
+      GAME_MODE = 'fruit';
       this.physics.drawFruitBody(ctx, fx, fy, fr, i);
       if (i !== 1 && i !== 2 && i !== 3 && i !== 4 && i !== 5) {
         this.physics.drawFace(ctx, fx, fy, fr, false, 'normal', i);
       }
+      GAME_MODE = _savedMode;
 
       // Vẽ mũi tên chỉ hướng tiến hóa tiếp theo
       if (i < 10) {
@@ -375,6 +409,106 @@ class Game {
         ctx.fillText('➔', arrowX, fy);
       }
     }
+  }
+
+  startTutorial() {
+    this.isTutorial = true;
+    this.tutorialMode = true;
+    this.tutorialStep = 0;
+
+    // Reset state
+    this.physics.clear();
+    this.floatingTexts = [];
+    this.score = 0;
+    this.state = 'playing';
+    this.isOverflowing = false;
+    this.overflowTimer = 0;
+    this.activeBooster = null;
+    this.slowTimer = 0;
+    this.mergeComboCount = 0;
+    this.launcherAngle = -Math.PI / 2;
+    this.launchCooldown = false;
+
+    // Physics setup — single core, no hazards
+    this.orbitRadius = 220;
+    this.warningLimit = 200;
+    this.physics.warningLimit = 200;
+    this.physics.centers = [{ x: this.cx, y: this.cy }];
+    this.physics.blackHoles = [];
+    this.physics.shrinkZones = [];
+    this.physics.portalPairs = [];
+    this.physics._onAbsorb = null;
+    this.physics._onShrink = null;
+    this.physics._onPortal = null;
+
+    // Infinite spawns — tutorial only needs ~3 shots
+    this.levelManager.remainingSpawns = 999;
+
+    // Pre-place a cascade tower: pairs của mỗi tier chồng lên nhau từ lớn (dưới) đến nhỏ (trên).
+    // Khi quả Cherry bắn vào cặp Cherry trên đỉnh → chuỗi merge tự động kích hoạt xuống dưới.
+    // Core at (this.cx=260, this.cy=340).
+    //
+    //   🍒🍒  y=197  (Cherry pair, r=12) ← shot lands here
+    //   🍓🍓  y=225  (Strawberry pair, r=16)
+    //   🍇🍇  y=262  (Grape pair, r=21)
+    //   🍊🍊  y=310  (Tangerine pair, r=27)
+    //          core (260, 340)
+    // 🍎  🍅   sides (decorative variety)
+    const cx = this.cx, cy = this.cy;
+    const cascadePairs = [
+      // [tier,  x1,   x2,   y ]  — x1,x2 separated by exactly 2*r (touching)
+      [3, 233, 287, 310],   // Tangerine  r=27, dist=54
+      [2, 239, 281, 262],   // Grape      r=21, dist=42
+      [1, 244, 276, 225],   // Strawberry r=16, dist=32
+      [0, 248, 272, 197],   // Cherry     r=12, dist=24
+    ];
+    for (const [tier, x1, x2, y] of cascadePairs) {
+      for (const x of [x1, x2]) {
+        const b = this.physics.addBody(x, y, tier);
+        b.scale = 1.0; b.targetScale = 1.0;
+        b.isSettled = true;
+        b.px = b.x; b.py = b.y;
+        b.mergeDelayFrames = 2; // expire fast so cascade can fire immediately
+      }
+    }
+    // Decorative large fruits on the sides for visual variety
+    for (const [tier, x, y] of [[5, 175, 335], [4, 348, 330]]) {
+      const b = this.physics.addBody(x, y, tier);
+      b.scale = 1.0; b.targetScale = 1.0;
+      b.isSettled = true;
+      b.px = b.x; b.py = b.y;
+      b.mergeDelayFrames = 999;  // won't merge (they're alone)
+    }
+
+    // Always spawn cherries in tutorial
+    this.currentFruitTier = 0;
+    this.nextFruitTier = 0;
+
+    // Hide all HUD noise
+    const hud = document.querySelector('.hud');
+    if (hud) hud.classList.add('hidden');
+    document.getElementById('warning-overlay').classList.add('hidden');
+    document.getElementById('tutorial-done-overlay').classList.add('hidden');
+    this.showBoosterBar(false);
+
+    this.showScreen('none');
+    this.updatePreviewCanvas();
+    this.lastTime = performance.now();
+  }
+
+  endTutorial() {
+    this.isTutorial = false;
+    this.tutorialMode = false;
+    this.tutorialStep = 0;
+    this.state = 'menu';
+
+    // Restore HUD
+    const hud = document.querySelector('.hud');
+    if (hud) hud.classList.remove('hidden');
+    document.getElementById('tutorial-done-overlay').classList.add('hidden');
+
+    this.physics.clear();
+    this.showScreen('menu-screen');
   }
 
   startLevel(idx) {
@@ -436,6 +570,18 @@ class Game {
       if (body.tier > 0) this.morphFruit(body, body.tier - 1);
     };
 
+    // Portal pairs: teleport fruit between two rectangles, velocity redirected toward core
+    if (lvl.portalPairs && lvl.portalPairs.length) {
+      this.physics.portalPairs = lvl.portalPairs.map(pair =>
+        pair.map(p => ({ x: p.x, y: p.y, width: p.width, height: p.height }))
+      );
+    } else {
+      this.physics.portalPairs = [];
+    }
+    this.physics._onPortal = (x, y) => {
+      this.particles.spawnMergeEffect(x, y, '#a855f7', 10);
+    };
+
     // Pre-placed fruits: seed the field with already-settled fruit defined by the level
     if (lvl.preplaced && lvl.preplaced.length) {
       for (const p of lvl.preplaced) {
@@ -479,6 +625,7 @@ class Game {
   }
 
   getRandomSpawnTier() {
+    if (this.isTutorial) return 0; // Tutorial chỉ dùng Cherry
     const currentLvl = this.levelManager.getCurrentLevel();
     const maxTier = currentLvl.maxSpawnTier;
     const r = Math.random();
@@ -917,6 +1064,12 @@ class Game {
 
     if (this.tutorialMode && this.tutorialStep === 1) {
       this.tutorialStep = 2;
+      if (this.isTutorial) {
+        setTimeout(() => {
+          const doneEl = document.getElementById('tutorial-done-overlay');
+          if (doneEl) doneEl.classList.remove('hidden');
+        }, 2200);
+      }
     }
 
     if (navigator.vibrate) {
@@ -1038,6 +1191,7 @@ class Game {
   }
 
   triggerWin() {
+    if (this.isTutorial) return;
     if (this.state !== 'playing') return;
     this.state = 'win';
     this.levelManager.unlockNextLevel();
@@ -1096,6 +1250,7 @@ class Game {
   }
 
   triggerLose() {
+    if (this.isTutorial) return;
     if (this.state !== 'playing') return;
     this.state = 'gameover';
     this.audio.playLose();
@@ -1237,7 +1392,7 @@ class Game {
       if (this._pendingVictory) {
         if (this.physics.mergeAnimations.length === 0) {
           if (!this._victoryDelay) this._victoryDelay = timestamp;
-          if (timestamp - this._victoryDelay >= 800) {
+          if (timestamp - this._victoryDelay >= 1300) {
             this._pendingVictory = false;
             this._victoryDelay = null;
             this.showScreen('victory-screen');
@@ -1290,6 +1445,7 @@ class Game {
     this.drawPlanetCore(ctx);
     this.drawBlackHoles(ctx);
     this.drawShrinkZones(ctx);
+    this.drawPortals(ctx);
     this.physics.draw(ctx);
     this.particles.draw(ctx);
     this.drawFloatingTexts(ctx);
@@ -1415,6 +1571,71 @@ class Game {
       ctx.fillText('▼ SHRINK ▼', zone.x + zone.width / 2, zone.y + zone.height / 2);
 
       ctx.restore();
+    }
+  }
+
+  drawPortals(ctx) {
+    if (!this.physics.portalPairs || !this.physics.portalPairs.length) return;
+    const time = performance.now();
+    // Màu cho từng cặp portal: [cam, tím, xanh lá...]
+    const COLORS = ['#ff6b35', '#a855f7', '#22c55e'];
+
+    for (let pi = 0; pi < this.physics.portalPairs.length; pi++) {
+      const pair = this.physics.portalPairs[pi];
+      const color = COLORS[pi % COLORS.length];
+      const labels = ['A', 'B'];
+
+      for (let si = 0; si < 2; si++) {
+        const p = pair[si];
+        const cx = p.x + p.width  / 2;
+        const cy = p.y + p.height / 2;
+        const pulse = Math.sin(time / 280 + si * Math.PI) * 0.18 + 0.72;
+        ctx.save();
+
+        // Outer glow
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 16;
+        ctx.strokeStyle = color.replace(')', `, ${pulse})`).replace('rgb', 'rgba').replace('#', 'rgba(') ;
+        // Dùng cách đơn giản hơn:
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(p.x, p.y, p.width, p.height);
+        ctx.setLineDash([]);
+
+        // Fill mờ
+        ctx.globalAlpha = pulse * 0.18;
+        ctx.fillStyle = color;
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+
+        // Inner swirl lines (animate)
+        ctx.globalAlpha = pulse * 0.55;
+        const rot = (time / 500 + si * Math.PI) % (Math.PI * 2);
+        const half = Math.min(p.width, p.height) * 0.38;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 6;
+        for (let i = 0; i < 3; i++) {
+          const a = rot + (i * Math.PI * 2) / 3;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(cx + Math.cos(a) * half, cy + Math.sin(a) * half);
+          ctx.stroke();
+        }
+
+        // Label
+        ctx.globalAlpha = 0.9;
+        ctx.shadowBlur = 0;
+        ctx.font = `bold ${Math.min(p.width, p.height) * 0.45}px sans-serif`;
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(labels[si], cx, cy);
+
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
     }
   }
 
@@ -1588,8 +1809,8 @@ class Game {
     let textLine2 = "";
 
     if (this.tutorialStep === 0) {
-      textLine1 = "👉 TAP ANYWHERE to shoot the Cherry into the core!";
-      textLine2 = "Goal: Evolve fruits to create a Tangerine 🍊";
+      textLine1 = "👆 TAP để bắn Cherry xuống lõi!";
+      textLine2 = this.isTutorial ? "Thử tap vào màn hình đi!" : "Mục tiêu: tạo 1 quả Cam 🍊 để qua màn";
 
       // Draw launching path guide line
       const t = (Date.now() / 250) % 2;
@@ -1621,8 +1842,8 @@ class Game {
       this.drawHandPointer(ctx, cx + 18, cy + 102);
     }
     else if (this.tutorialStep === 1) {
-      textLine1 = "👉 Launcher rotates automatically...";
-      textLine2 = "TAP to shoot when aligned with the first Cherry!";
+      textLine1 = "🔄 Vòng phóng tự quay — tap khi muốn bắn!";
+      textLine2 = "Bắn Cherry vào gần quả vừa rơi để ghép 🍒+🍒";
 
       // Draw alignment arrow
       ctx.strokeStyle = 'rgba(255, 94, 151, 0.45)';
@@ -1649,8 +1870,8 @@ class Game {
       this.drawHandPointer(ctx, cx + 18, cy + 120);
     }
     else if (this.tutorialStep === 2) {
-      textLine1 = "🎉 SUCCESS! Evolved into a Strawberry 🍓";
-      textLine2 = "Keep merging to upgrade to Tangerine 🍊 to clear!";
+      textLine1 = "🎉 Hai Cherry hợp thành Strawberry 🍓!";
+      textLine2 = this.isTutorial ? "Cứ vậy mà chơi thôi! Nhấn nút để bắt đầu 👇" : "Tiếp tục merge để lên Cam 🍊 và qua màn!";
     }
 
     ctx.fillText(textLine1, cx, boxY + 22);

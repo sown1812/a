@@ -38,8 +38,8 @@ class LevelManager {
         orbitRadius: 147, // Giảm 30% (210 -> 147)
         warningLimit: 122, // Giảm 30% (175 -> 122)
         launcherSpeed: 0.65, // Tốc độ quay phi thuyền chậm để dễ ngắm bắn
-        maxSpawns: 18, // Giới hạn số quả được sinh ra ở màn 1
-        starScores: [150, 350, 600], // Mốc điểm cho 1★ / 2★ / 3★
+        maxSpawns: 30, // Giới hạn số quả được sinh ra ở màn 1
+        starScores: [50, 100, 150], // Mốc điểm cho 1★ / 2★ / 3★
         goals: [
           { type: 'fruit', target: 3, count: 1, current: 0 } // Base: tạo 1 quả Cam/Quýt (Tier 3) để qua màn
         ]
@@ -49,11 +49,11 @@ class LevelManager {
         name: "Sparkling Vineyard",
         description: "Merge 3 Grapes (🍇 Tier 2) & 1 Persimmon (🍅 Tier 4).",
         maxSpawnTier: 3,
-        orbitRadius: 195,
+        orbitRadius: 170,
         warningLimit: 165,
         launcherSpeed: 0.95,
-        maxSpawns: 15,
-        starScores: [400, 800, 1300],
+        maxSpawns: 30,
+        starScores: [100, 200, 300],
         goals: [
           { type: 'fruit', target: 2, count: 2, current: 0 },
           { type: 'fruit', target: 4, count: 1, current: 0 }
@@ -124,7 +124,7 @@ class LevelManager {
         orbitRadius: 248,
         warningLimit: 85, // Per-well safe radius (overflow measured from nearest core)
         launcherSpeed: 1.1,
-        maxSpawns: 45,
+        maxSpawns: 55,
         // Three cores in an equilateral triangle (135px from canvas center), kept clear of
         // each other and tucked inside the orbit ring so no rings overlap.
         centers: [
@@ -156,7 +156,7 @@ class LevelManager {
         orbitRadius: 248,
         warningLimit: 130,
         launcherSpeed: 1.0,
-        maxSpawns: 40,
+        maxSpawns: 50,
         centers: [
           { x: 260, y: 340 }
         ],
@@ -182,7 +182,7 @@ class LevelManager {
         orbitRadius: 248,
         warningLimit: 200,
         launcherSpeed: 1.1,
-        maxSpawns: 55,
+        maxSpawns: 65,
         centers: [
           { x: 260, y: 360 }
         ],
@@ -194,6 +194,31 @@ class LevelManager {
         goals: [
           { type: 'fruit', target: 7, count: 1, current: 0 },
           { type: 'fruit', target: 4, count: 2, current: 0 }
+        ]
+      },
+      {
+        id: 10,
+        name: "Portal Nexus",
+        description: "Two portals warp fruits across the field — exits always point toward the core!",
+        maxSpawnTier: 5,
+        orbitRadius: 248,
+        warningLimit: 200,
+        launcherSpeed: 1.1,
+        maxSpawns: 60,
+        centers: [
+          { x: 260, y: 350 }
+        ],
+        // Portal A (trái) ↔ Portal B (phải) — dọc hai bên, cao ngang tầm trung
+        portalPairs: [
+          [
+            { x: 52,  y: 270, width: 22, height: 90 },
+            { x: 446, y: 270, width: 22, height: 90 }
+          ]
+        ],
+        starScores: [700, 1400, 2400],
+        goals: [
+          { type: 'fruit', target: 8, count: 1, current: 0 },
+          { type: 'fruit', target: 5, count: 2, current: 0 }
         ]
       }
     ];

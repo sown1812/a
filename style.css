@@ -1785,3 +1785,34 @@ body {
   to   { transform: scale(1) translateY(0);       opacity: 1; }
 }
 
+
+/* Mode Toggle on Menu */
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+  width: 85%;
+  margin-bottom: 12px;
+  justify-content: center;
+}
+.mode-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 50px;
+  font-size: 14px;
+  font-weight: 700;
+  border: 2px solid rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.6);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: var(--font-family-body);
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(115,95,157,0.1);
+}
+.mode-btn.active {
+  background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-pink) 100%);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(155, 81, 224, 0.35);
+  transform: translateY(-1px);
+}

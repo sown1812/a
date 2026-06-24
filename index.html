@@ -110,6 +110,11 @@
       </div>
     </div>
 
+    <!-- Tutorial Done Overlay (shown after tutorial merge step completes) -->
+    <div id="tutorial-done-overlay" class="hidden" style="position:absolute;bottom:120px;left:0;right:0;display:flex;justify-content:center;pointer-events:none;z-index:50;">
+      <button id="tutorial-done-btn" class="btn btn-primary" style="pointer-events:auto;padding:14px 36px;font-size:1.05em;box-shadow:0 0 24px rgba(155,81,224,0.6);">🚀 Bắt đầu chơi!</button>
+    </div>
+
     <!-- Screen Overlays -->
     
     <!-- 1. Main Menu / Start Screen (Overhauled with Shop, Play, Teams tabs) -->
@@ -149,8 +154,13 @@
               <p id="menu-current-level-desc">Merge Cherries to create a Tangerine.</p>
             </div>
 
+            <div class="mode-toggle">
+              <button id="mode-fruit-btn" class="mode-btn">🍎 Hoa Quả</button>
+              <button id="mode-custom-btn" class="mode-btn">👥 Tùy Chỉnh</button>
+            </div>
             <button id="start-btn" class="btn btn-primary btn-pulse btn-play-large">PLAY NOW</button>
             <button id="level-select-btn" class="btn btn-secondary">SELECT LEVEL</button>
+            <button id="tutorial-btn" class="btn btn-secondary" style="opacity:0.8;font-size:0.85em;">🎓 HƯỚNG DẪN</button>
             
             <div class="instructions">
               <h3>How to Play:</h3>
