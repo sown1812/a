@@ -4,6 +4,34 @@
 const _mckImage = new Image();
 _mckImage.src = 'mck.png';
 
+const _tier4Image = new Image();
+_tier4Image.src = 'tier4.jpg';
+const _tier3Image = new Image();
+_tier3Image.src = 'thai.png';
+const _tier2Image = new Image();
+_tier2Image.src = 'giang.png';
+const _tier1Image = new Image();
+_tier1Image.src = 'phong.png';
+
+// Render a face photo cropped to the fruit's circle.
+// Uses object-fit:cover semantics (shorter dimension fills diameter) and
+// counter-rotates so the face stays upright while the fruit spins.
+function _drawFaceCircle(ctx, img, x, y, r, angle, fallbackColor) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.rotate(-angle);
+  if (img.complete && img.naturalWidth > 0) {
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const scale = (2 * r) / Math.min(iw, ih);
+    const dw = iw * scale, dh = ih * scale;
+    ctx.drawImage(img, x - dw / 2, y - r, dw, dh);
+  } else {
+    ctx.fillStyle = fallbackColor;
+    ctx.fill();
+  }
+}
+
 class PhysicsEngine {
   constructor(cx, cy, planetRadius) {
     this.cx = cx;
@@ -103,7 +131,12 @@ class PhysicsEngine {
         b.growthPhase = false;
       }
 
-      // 1b. Expression timer decay
+      // 1b. Merge delay for preplaced fruits
+      if (b.mergeDelayFrames > 0) {
+        b.mergeDelayFrames = Math.max(0, b.mergeDelayFrames - dt);
+      }
+
+      // 1c. Expression timer decay
       if (b.expressionTimer > 0) {
         b.expressionTimer -= dt;
         if (b.expressionTimer <= 0) {
@@ -378,9 +411,10 @@ class PhysicsEngine {
               }
             }
 
-            // Merge detection on final iteration
+            // Merge detection on final iteration (skip if either fruit still has spawn protection)
             if (step === iterations - 1) {
-              if (b1.tier === b2.tier && !b1.merged && !b2.merged) {
+              if (b1.tier === b2.tier && !b1.merged && !b2.merged &&
+                  !(b1.mergeDelayFrames > 0) && !(b2.mergeDelayFrames > 0)) {
                 b1.merged = true;
                 b2.merged = true;
                 mergesToProcess.push({ b1, b2 });
@@ -452,7 +486,7 @@ class PhysicsEngine {
       
       this.drawFruitBody(ctx, 0, 0, b.r, b.tier, b.angle || 0);
       
-      if (b.r > 5 && b.tier !== 5) {
+      if (b.r > 5 && b.tier !== 5 && b.tier !== 4 && b.tier !== 3 && b.tier !== 2 && b.tier !== 1) {
         this.drawFace(ctx, 0, 0, b.r, b.blinking, b.expression, b.tier);
       }
       
@@ -474,7 +508,7 @@ class PhysicsEngine {
       ctx.scale(scale1, scale1);
       ctx.rotate(rotAngle1);
       this.drawFruitBody(ctx, 0, 0, config.r, anim.tier, rotAngle1);
-      if (config.r > 5 && anim.tier !== 5) {
+      if (config.r > 5 && anim.tier !== 5 && anim.tier !== 4 && anim.tier !== 3 && anim.tier !== 2 && anim.tier !== 1) {
         this.drawFace(ctx, 0, 0, config.r, false, 'normal', anim.tier);
       }
       ctx.restore();
@@ -490,7 +524,7 @@ class PhysicsEngine {
       ctx.scale(scale2, scale2);
       ctx.rotate(rotAngle2);
       this.drawFruitBody(ctx, 0, 0, config.r, anim.tier, rotAngle2);
-      if (config.r > 5 && anim.tier !== 5) {
+      if (config.r > 5 && anim.tier !== 5 && anim.tier !== 4 && anim.tier !== 3 && anim.tier !== 2 && anim.tier !== 1) {
         this.drawFace(ctx, 0, 0, config.r, false, 'normal', anim.tier);
       }
       ctx.restore();
@@ -515,6 +549,12 @@ class PhysicsEngine {
         ctx.shadowOffsetY = 4;
       }
     }
+
+    // Face photo overrides for tiers 2, 3, 4
+    if (tier === 4) { _drawFaceCircle(ctx, _tier4Image, x, y, r, angle, '#ff5e36'); ctx.restore(); return; }
+    if (tier === 3) { _drawFaceCircle(ctx, _tier3Image, x, y, r, angle, '#ffa502'); ctx.restore(); return; }
+    if (tier === 2) { _drawFaceCircle(ctx, _tier2Image, x, y, r, angle, '#8c46ff'); ctx.restore(); return; }
+    if (tier === 1) { _drawFaceCircle(ctx, _tier1Image, x, y, r, angle, '#ff527b'); ctx.restore(); return; }
 
     // Special rendering for Grape (tier 2) to look extremely cute, premium and bubbly
     if (tier === 2) {

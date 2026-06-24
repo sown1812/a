@@ -133,13 +133,15 @@ class LevelManager {
           { x: 377, y: 408 }
         ],
         // Fruit already on the field at the start of the level (absolute logical coords)
+        // Spacing rules: same-tier fruits must be placed further apart than their combined radii
+        // Cherry r=12 (combined 24), Strawberry r=16 (combined 32), Grape r=21 (combined 42)
         preplaced: [
-          // Top well
-          { tier: 0, x: 248, y: 192 }, { tier: 0, x: 272, y: 192 }, { tier: 1, x: 260, y: 218 },
-          // Bottom-left well
-          { tier: 1, x: 131, y: 395 }, { tier: 1, x: 155, y: 395 }, { tier: 0, x: 143, y: 421 },
-          // Bottom-right well
-          { tier: 2, x: 365, y: 395 }, { tier: 0, x: 389, y: 395 }, { tier: 0, x: 377, y: 421 }
+          // Top well (center 260,205): cherries 36px apart > combined 24 ✓
+          { tier: 0, x: 242, y: 193 }, { tier: 0, x: 278, y: 193 }, { tier: 1, x: 260, y: 225 },
+          // Bottom-left well (center 143,408): strawberries 50px apart > combined 32 ✓
+          { tier: 1, x: 118, y: 397 }, { tier: 1, x: 168, y: 397 }, { tier: 0, x: 143, y: 430 },
+          // Bottom-right well (center 377,408): grape above, cherries 40px apart > combined 24 ✓
+          { tier: 2, x: 377, y: 383 }, { tier: 0, x: 357, y: 415 }, { tier: 0, x: 397, y: 415 }
         ],
         starScores: [800, 1500, 2500],
         goals: [

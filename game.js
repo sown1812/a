@@ -406,6 +406,8 @@ class Game {
         body.isSettled = true;
         body.px = p.x;
         body.py = p.y;
+        // Prevent auto-merge on spawn: give fruits 2 seconds to settle before they can merge
+        body.mergeDelayFrames = 120;
       }
     }
 
