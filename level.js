@@ -32,6 +32,28 @@ class LevelManager {
     // <<LEVEL_EDITOR:START>> — Level Editor (editor.html) tự ghi đè vùng này. Đừng sửa/xoá 2 dòng marker START/END.
     this.levels = [
       {
+        id: 0,
+        maxSpawnTier: 0,
+        orbitRadius: 220,
+        warningLimit: 200,
+        launcherSpeed: 0.95,
+        maxSpawns: 999,
+        starScores: [0, 0, 0],
+        preplaced: [
+          { tier: 3, x: 233, y: 310 },
+          { tier: 3, x: 287, y: 310 },
+          { tier: 2, x: 239, y: 262 },
+          { tier: 2, x: 281, y: 262 },
+          { tier: 1, x: 244, y: 225 },
+          { tier: 1, x: 276, y: 225 },
+          { tier: 0, x: 248, y: 197 },
+          { tier: 0, x: 272, y: 197 },
+          { tier: 5, x: 175, y: 335 },
+          { tier: 4, x: 348, y: 330 }
+        ],
+        goals: []
+      },
+      {
         id: 1,
         maxSpawnTier: 0,
         orbitRadius: 147,
@@ -84,8 +106,8 @@ class LevelManager {
           { x: 348, y: 407.8 }
         ],
         blackHoles: [
-          { x: 147, y: 473.8, radius: 30 },
-          { x: 362, y: 195.8, radius: 30 }
+          { x: 176.54, y: 479.95, radius: 40 },
+          { x: 338.37, y: 187.23, radius: 40 }
         ],
         portalPairs: [
           [
@@ -119,19 +141,19 @@ class LevelManager {
         ],
         portalPairs: [
           [
-            { x1: 96, y1: 289, x2: 96, y2: 369 },
-            { x1: 433, y1: 300, x2: 433, y2: 380 }
+            { x1: 113, y1: 299.95, x2: 112, y2: 399.95 },
+            { x1: 422, y1: 303.95, x2: 422, y2: 403.95 }
           ],
           [
-            { x1: 175, y1: 196, x2: 345, y2: 196 },
-            { x1: 177, y1: 495, x2: 347, y2: 495 }
+            { x1: 329, y1: 220.95, x2: 198, y2: 219.95 },
+            { x1: 211, y1: 470.95, x2: 335, y2: 470.95 }
           ]
         ],
         rails: [
-          { x1: 173, y1: 213.95, x2: 108, y2: 285.95 },
-          { x1: 106, y1: 368.95, x2: 177, y2: 482.95 },
-          { x1: 422, y1: 378.95, x2: 350, y2: 483.95 },
-          { x1: 345, y1: 208.95, x2: 421, y2: 299.95 }
+          { x1: 335, y1: 469.8, x2: 423, y2: 405.8 },
+          { x1: 212, y1: 470.8, x2: 111, y2: 400.8 },
+          { x1: 113, y1: 295.8, x2: 196, y2: 219.8 },
+          { x1: 421, y1: 301.8, x2: 330, y2: 221.8 }
         ],
         preplaced: [
           { tier: 5, x: 215, y: 305.8 }
@@ -227,25 +249,31 @@ class LevelManager {
       {
         id: 8,
         maxSpawnTier: 4,
-        orbitRadius: 248,
-        warningLimit: 130,
+        orbitRadius: 250,
+        warningLimit: 200,
         launcherSpeed: 1,
-        maxSpawns: 50,
+        maxSpawns: 25,
         starScores: [500, 1000, 1800],
-        centers: [
-          { x: 260, y: 340 }
+        portalPairs: [
+          [
+            { x1: 385, y1: 218.95, x2: 422, y2: 277.95 },
+            { x1: 120, y1: 378.95, x2: 161, y2: 435.95 }
+          ],
+          [
+            { x1: 144, y1: 208.95, x2: 102, y2: 264.95 },
+            { x1: 353, y1: 452.95, x2: 395, y2: 396.95 }
+          ]
         ],
-        blackHoles: [
-          { x: 260, y: 250, radius: 20 }
+        ringGates: [
+          { cx: 260, cy: 336.8, r: 160, gaps: [{ from: 257.5, to: 282.5 }, { from: 77.5, to: 102.5 }] }
         ],
         preplaced: [
-          { tier: 0, x: 244, y: 330 },
-          { tier: 0, x: 276, y: 330 },
-          { tier: 1, x: 260, y: 358 }
+          { tier: 2, x: 228, y: 319.8 },
+          { tier: 5, x: 306, y: 323.8 }
         ],
         goals: [
-          { type: 'fruit', target: 6, count: 1, current: 0 },
-          { type: 'fruit', target: 3, count: 3, current: 0 }
+          { type: 'fruit', target: 7, count: 1, current: 0 },
+          { type: 'fruit', target: 3, count: 1, current: 0 }
         ]
       },
       {
@@ -267,31 +295,6 @@ class LevelManager {
           { type: 'fruit', target: 4, count: 2, current: 0 }
         ]
       },
-      {
-        id: 10,
-        maxSpawnTier: 6,
-        orbitRadius: 235,
-        warningLimit: 200,
-        launcherSpeed: 1.15,
-        maxSpawns: 40,
-        starScores: [1000, 1800, 2800],
-        goals: [
-          { type: 'fruit', target: 8, count: 1, current: 0 }
-        ]
-      },
-      {
-        id: 11,
-        maxSpawnTier: 5,
-        orbitRadius: 235,
-        warningLimit: 200,
-        launcherSpeed: 1.25,
-        maxSpawns: 50,
-        starScores: [1500, 2800, 4500],
-        goals: [
-          { type: 'fruit', target: 9, count: 1, current: 0 },
-          { type: 'fruit', target: 1, count: 8, current: 0 }
-        ]
-      }
     ];
     // <<LEVEL_EDITOR:END>>
 

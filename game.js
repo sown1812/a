@@ -35,6 +35,8 @@ class Game {
     this.shakeDecay = 0.86;
     this.mergeComboCount = 0;
     this.lastMergeTime = 0;
+    this.comboTimer = 0;        // ms còn lại của cửa sổ combo hiện tại
+    this.comboWindowDuration = 0; // tổng độ dài cửa sổ combo (để tính % fill bar)
 
     // Floating text points (+15, +30)
     this.floatingTexts = [];
@@ -63,6 +65,9 @@ class Game {
 
     this.score = 0;
     this.lastTime = 0;
+
+    this.isEndlessMode = false;
+    this.endlessHighscore = parseInt(localStorage.getItem('planet_merge_endless_hs') || '0', 10);
 
     // Economy and progression variables
     this.coins = parseInt(localStorage.getItem('planet_merge_coins') || '100', 10);
@@ -125,6 +130,23 @@ class Game {
     document.getElementById('start-btn').addEventListener('click', () => {
       this.audio.playClick();
       this.startLevel(0); // PLAY NOW always starts at Level 1
+    });
+
+    document.getElementById('endless-btn').addEventListener('click', () => {
+      this.audio.playClick();
+      this.startEndless();
+    });
+
+    document.getElementById('endless-retry-btn').addEventListener('click', () => {
+      this.audio.playClick();
+      this.startEndless();
+    });
+
+    document.getElementById('endless-menu-btn').addEventListener('click', () => {
+      this.audio.playClick();
+      this.isEndlessMode = false;
+      this._restoreHUD();
+      this.showScreen('menu-screen');
     });
 
     document.getElementById('level-select-btn').addEventListener('click', () => {
@@ -202,6 +224,8 @@ class Game {
 
     document.getElementById('victory-menu-btn').addEventListener('click', () => {
       this.audio.playClick();
+      this.isEndlessMode = false;
+      this._restoreHUD();
       this.showScreen('menu-screen');
     });
 
@@ -212,6 +236,8 @@ class Game {
 
     document.getElementById('gameover-menu-btn').addEventListener('click', () => {
       this.audio.playClick();
+      this.isEndlessMode = false;
+      this._restoreHUD();
       this.showScreen('menu-screen');
     });
 
@@ -263,12 +289,25 @@ class Game {
     }
 
     // Booster bar buttons
-    document.querySelectorAll('.booster-btn').forEach(btn => {
+    document.querySelectorAll('.booster-btn[data-booster]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.audio.playClick();
         this.useBooster(btn.getAttribute('data-booster'));
       });
+    });
+
+    // Home button inside booster bar
+    document.getElementById('ingame-home-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.audio.playClick();
+      this.state = 'menu';
+      this.physics.clear();
+      this.comboTimer = 0;
+      this.mergeComboCount = 0;
+      this.updateComboUI();
+      this.showBoosterBar(false);
+      this.showScreen('menu-screen');
     });
 
     // Vacuum hold panel — tap to release the held fruit
@@ -347,6 +386,33 @@ class Game {
     if (combo === 3) return words3[Math.floor(Math.random() * words3.length)];
     if (combo === 4) return words4[Math.floor(Math.random() * words4.length)];
     return words5[Math.floor(Math.random() * words5.length)];
+  }
+
+  updateComboUI() {
+    const display = document.getElementById('combo-display');
+    const countText = document.getElementById('combo-count-text');
+    const fill = document.getElementById('combo-bar-fill');
+    if (!display) return;
+
+    if (this.mergeComboCount < 2 || this.comboTimer <= 0) {
+      display.classList.add('hidden');
+      return;
+    }
+
+    display.classList.remove('hidden');
+    countText.textContent = `×${this.mergeComboCount}`;
+
+    const ratio = this.comboWindowDuration > 0 ? this.comboTimer / this.comboWindowDuration : 0;
+    fill.style.width = (ratio * 100) + '%';
+
+    // Color shifts green → yellow → red as timer depletes
+    if (ratio > 0.6) {
+      fill.style.background = 'linear-gradient(90deg, #4ade80, #22c55e)';
+    } else if (ratio > 0.3) {
+      fill.style.background = 'linear-gradient(90deg, #facc15, #f59e0b)';
+    } else {
+      fill.style.background = 'linear-gradient(90deg, #f87171, #ef4444)';
+    }
   }
 
   resizeCanvas() {
@@ -495,14 +561,20 @@ class Game {
     this.activeBooster = null;
     this.slowTimer = 0;
     this.mergeComboCount = 0;
+    this.comboTimer = 0;
+    this.comboWindowDuration = 0;
     this.launcherAngle = -Math.PI / 2;
     this.launchCooldown = false;
 
+    // Load tutorial level config (id: 0) — editable via editor.html
+    const tutLevel = this.levelManager.levels.find(l => l.id === 0);
+
     // Physics setup — single core, no hazards
-    this.orbitRadius = 220;
-    this.warningLimit = 200;
-    this.physics.warningLimit = 200;
-    this.physics.centers = [{ x: this.cx, y: this.cy }];
+    this.orbitRadius = tutLevel ? tutLevel.orbitRadius : 220;
+    this.warningLimit = tutLevel ? tutLevel.warningLimit : 200;
+    this.physics.warningLimit = this.warningLimit;
+    this.physics.centers = (tutLevel && tutLevel.centers && tutLevel.centers.length)
+      ? tutLevel.centers : [{ x: this.cx, y: this.cy }];
     this.physics.blackHoles = [];
     this.physics.shrinkZones = [];
     this.physics.portalPairs = [];
@@ -515,40 +587,14 @@ class Game {
     // Infinite spawns — tutorial only needs ~3 shots
     this.levelManager.remainingSpawns = 999;
 
-    // Pre-place a cascade tower: pairs của mỗi tier chồng lên nhau từ lớn (dưới) đến nhỏ (trên).
-    // Khi quả Cherry bắn vào cặp Cherry trên đỉnh → chuỗi merge tự động kích hoạt xuống dưới.
-    // Core at (this.cx=260, this.cy=340).
-    //
-    //   🍒🍒  y=197  (Cherry pair, r=12) ← shot lands here
-    //   🍓🍓  y=225  (Strawberry pair, r=16)
-    //   🍇🍇  y=262  (Grape pair, r=21)
-    //   🍊🍊  y=310  (Tangerine pair, r=27)
-    //          core (260, 340)
-    // 🍎  🍅   sides (decorative variety)
-    const cx = this.cx, cy = this.cy;
-    const cascadePairs = [
-      // [tier,  x1,   x2,   y ]  — x1,x2 separated by exactly 2*r (touching)
-      [3, 233, 287, 310],   // Tangerine  r=27, dist=54
-      [2, 239, 281, 262],   // Grape      r=21, dist=42
-      [1, 244, 276, 225],   // Strawberry r=16, dist=32
-      [0, 248, 272, 197],   // Cherry     r=12, dist=24
-    ];
-    for (const [tier, x1, x2, y] of cascadePairs) {
-      for (const x of [x1, x2]) {
-        const b = this.physics.addBody(x, y, tier);
-        b.scale = 1.0; b.targetScale = 1.0;
-        b.isSettled = true;
-        b.px = b.x; b.py = b.y;
-        b.mergeDelayFrames = 2; // expire fast so cascade can fire immediately
-      }
-    }
-    // Decorative large fruits on the sides for visual variety
-    for (const [tier, x, y] of [[5, 175, 335], [4, 348, 330]]) {
+    // Pre-place fruits from tutorial level config
+    const tutPreplaced = (tutLevel && tutLevel.preplaced) ? tutLevel.preplaced : [];
+    for (const { tier, x, y } of tutPreplaced) {
       const b = this.physics.addBody(x, y, tier);
       b.scale = 1.0; b.targetScale = 1.0;
       b.isSettled = true;
       b.px = b.x; b.py = b.y;
-      b.mergeDelayFrames = 999;  // won't merge (they're alone)
+      b.mergeDelayFrames = 2;
     }
 
     // Always spawn cherries in tutorial
@@ -582,11 +628,90 @@ class Game {
     this.showScreen('menu-screen');
   }
 
+  _restoreHUD() {
+    const spawnInfo = document.querySelector('.spawn-info');
+    if (spawnInfo) spawnInfo.classList.remove('hidden');
+    const goalLabel = document.querySelector('.goal-info .label');
+    if (goalLabel) goalLabel.textContent = 'GOAL';
+    const starTrack = document.getElementById('star-track');
+    if (starTrack) starTrack.classList.remove('hidden');
+  }
+
+  startEndless() {
+    if (this.lives <= 0) {
+      this.showNoHeartsScreen();
+      return;
+    }
+
+    this.isEndlessMode = true;
+    this.tutorialMode = false;
+    this.physics.clear();
+    this.particles.particles = [];
+    this.particles.rings = [];
+    this.floatingTexts = [];
+    this.shakeIntensity = 0;
+    this.score = 0;
+    this.lastTime = performance.now();
+    this.state = 'playing';
+    this.isOverflowing = false;
+    this.overflowTimer = 0;
+    this.activeBooster = null;
+    this.slowTimer = 0;
+    this.vacuumHeldFruitTier = null;
+    this.updateVacuumCanvas();
+    this._pendingVictory = false;
+    this._victoryDelay = null;
+    this._loseDelay = null;
+
+    this.orbitRadius = 235;
+    this.warningLimit = 200;
+    this.launcherSpeed = 0.95;
+    this.orbitPath = 'circle';
+    this.aimNearest = false;
+    this.physics.centers = [{ x: this.cx, y: this.cy }];
+    this.physics.blackHoles = [];
+    this.physics.shrinkZones = [];
+    this.physics.portalPairs = [];
+    this.physics.rails = [];
+    this.physics.warningLimit = this.warningLimit;
+    this.levelManager.remainingSpawns = 999999;
+
+    this.currentFruitTier = this.getRandomSpawnTier();
+    this.nextFruitTier = this.getRandomSpawnTier();
+
+    document.getElementById('level-display').innerText = '∞';
+    document.getElementById('score-display').innerText = 0;
+    document.getElementById('warning-overlay').classList.add('hidden');
+
+    // Ẩn SHOTS, đổi GOAL label thành BEST
+    const spawnInfo = document.querySelector('.spawn-info');
+    if (spawnInfo) spawnInfo.classList.add('hidden');
+    const goalLabel = document.querySelector('.goal-info .label');
+    if (goalLabel) goalLabel.textContent = 'BEST';
+    const starTrack = document.getElementById('star-track');
+    if (starTrack) starTrack.classList.add('hidden');
+    this._renderEndlessBest();
+
+    this.updatePreviewCanvas();
+    this.drawEvolutionCircle();
+    this.showScreen('none');
+    this.showBoosterBar(true);
+  }
+
+  _renderEndlessBest() {
+    const container = document.getElementById('goal-container');
+    if (!container) return;
+    container.innerHTML = `<span style="font-size:1.05em;font-weight:700;color:#ffd700;">${this.endlessHighscore}</span>`;
+  }
+
   startLevel(idx) {
     if (this.lives <= 0) {
       this.showNoHeartsScreen();
       return;
     }
+
+    this.isEndlessMode = false;
+    this._restoreHUD();
 
     this.levelManager.selectLevel(idx);
     this.levelManager.resetCurrentGoals();
@@ -666,6 +791,16 @@ class Game {
     }
     this.physics._onRailBounce = null;
 
+    // Ring gates: vòng chắn có khe hở
+    if (lvl.ringGates && lvl.ringGates.length) {
+      this.physics.ringGates = lvl.ringGates.map(g => ({
+        cx: g.cx, cy: g.cy, r: g.r,
+        gaps: g.gaps.map(gap => ({ from: gap.from, to: gap.to }))
+      }));
+    } else {
+      this.physics.ringGates = [];
+    }
+
     // Pre-placed fruits: seed the field with already-settled fruit defined by the level
     if (lvl.preplaced && lvl.preplaced.length) {
       for (const p of lvl.preplaced) {
@@ -709,16 +844,22 @@ class Game {
   }
 
   getRandomSpawnTier() {
-    if (this.isTutorial) return 0; // Tutorial chỉ dùng Cherry
-    const currentLvl = this.levelManager.getCurrentLevel();
-    const maxTier = currentLvl.maxSpawnTier;
+    if (this.isTutorial) return 0;
+    let maxTier;
+    if (this.isEndlessMode) {
+      if (this.score < 500)       maxTier = 2;
+      else if (this.score < 1500) maxTier = 3;
+      else if (this.score < 3500) maxTier = 4;
+      else                        maxTier = 5;
+    } else {
+      maxTier = this.levelManager.getCurrentLevel().maxSpawnTier;
+    }
     const r = Math.random();
     let tier;
-    if (r < 0.45) tier = 0;      // Cherry (45%)
-    else if (r < 0.75) tier = 1; // Strawberry (30%)
-    else if (r < 0.90) tier = 2; // Grape (15%)
-    else tier = 3;               // Orange
-
+    if (r < 0.45) tier = 0;
+    else if (r < 0.75) tier = 1;
+    else if (r < 0.90) tier = 2;
+    else tier = 3;
     return Math.min(tier, maxTier);
   }
 
@@ -997,6 +1138,9 @@ class Game {
       this.activeBooster = null;
       const hint = document.getElementById('booster-hint');
       if (hint) hint.classList.add('hidden');
+      this.comboTimer = 0;
+      this.mergeComboCount = 0;
+      this.updateComboUI();
     }
     this._manualRotateDir = 0;
     this.updateManualControls();
@@ -1223,7 +1367,7 @@ class Game {
       });
     }
 
-    if (this.levelManager.checkVictory()) {
+    if (!this.isEndlessMode && this.levelManager.checkVictory()) {
       this.triggerWin();
     }
   }
@@ -1249,13 +1393,15 @@ class Game {
       }
     }
 
-    const now = performance.now();
-    if (now - this.lastMergeTime < 450) {
+    if (this.comboTimer > 0) {
       this.mergeComboCount += 1;
     } else {
       this.mergeComboCount = 1;
     }
-    this.lastMergeTime = now;
+    const comboWindows = [2500, 2000, 1600, 1200, 900];
+    this.comboWindowDuration = comboWindows[Math.min(this.mergeComboCount - 1, comboWindows.length - 1)];
+    this.comboTimer = this.comboWindowDuration;
+    this.updateComboUI();
 
     const config = FRUIT_CONFIGS[currentTier];
     this.particles.spawnMergeEffect(midX, midY, config.color, 16 + currentTier * 2);
@@ -1341,7 +1487,7 @@ class Game {
       this.updateHUDGoals();
     }
 
-    if (this.levelManager.checkVictory()) {
+    if (!this.isEndlessMode && this.levelManager.checkVictory()) {
       this.triggerWin();
     }
   }
@@ -1419,7 +1565,21 @@ class Game {
     if (this.state !== 'playing') return;
     this.state = 'gameover';
     this.audio.playLose();
-    if (navigator.vibrate) navigator.vibrate([100, 80, 150]); // Sad rumble
+    if (navigator.vibrate) navigator.vibrate([100, 80, 150]);
+
+    if (this.isEndlessMode) {
+      const isNew = this.score > this.endlessHighscore;
+      if (isNew) {
+        this.endlessHighscore = this.score;
+        localStorage.setItem('planet_merge_endless_hs', this.endlessHighscore);
+      }
+      document.getElementById('endless-final-score').textContent = this.score;
+      document.getElementById('endless-best-score').textContent = this.endlessHighscore;
+      const newRecordEl = document.getElementById('endless-newrecord');
+      if (newRecordEl) newRecordEl.classList.toggle('hidden', !isNew);
+      this.showScreen('endless-gameover-screen');
+      return;
+    }
 
     const wasFullBefore = this.lives === this.maxHearts;
     this.lives = Math.max(0, this.lives - 1);
@@ -1445,7 +1605,6 @@ class Game {
       }
     });
 
-    // Hiện ngay — update() đã chờ 2s trước khi gọi triggerLose()
     this.showScreen('gameover-screen');
   }
 
@@ -1476,6 +1635,16 @@ class Game {
           if (this.slowTimer <= 0) this.slowTimer = 0;
         }
 
+        // Combo window countdown
+        if (this.comboTimer > 0) {
+          this.comboTimer -= 0.016 * dt * 1000;
+          if (this.comboTimer <= 0) {
+            this.comboTimer = 0;
+            this.mergeComboCount = 0;
+          }
+          this.updateComboUI();
+        }
+
         if (this.isManual()) {
           // Manual: player rotates the launcher with the ◀ ▶ pads or ←/→ (A/D) keys
           this.launcherAngle += this._manualRotateDir * this.manualRotateSpeed * 0.016 * dt;
@@ -1495,12 +1664,14 @@ class Game {
       );
 
       if (this.state === 'playing') {
-        // Sync fruit goal checks in real-time
-        this.levelManager.syncFruitGoals(this.physics.bodies);
-        this.updateHUDGoals();
-
-        if (this.levelManager.checkVictory()) {
-          this.triggerWin();
+        if (this.isEndlessMode) {
+          this._renderEndlessBest();
+        } else {
+          this.levelManager.syncFruitGoals(this.physics.bodies);
+          this.updateHUDGoals();
+          if (this.levelManager.checkVictory()) {
+            this.triggerWin();
+          }
         }
 
         let overflowDetected = false;
@@ -1534,8 +1705,8 @@ class Game {
           document.getElementById('warning-overlay').classList.add('hidden');
         }
 
-        // Kiểm tra thua cuộc khi hết lượt bắn fruit (spawns limit)
-        if (this.levelManager.remainingSpawns <= 0 && !this.launchCooldown) {
+        // Kiểm tra thua cuộc khi hết lượt bắn fruit (spawns limit) — không áp dụng cho endless mode
+        if (!this.isEndlessMode && this.levelManager.remainingSpawns <= 0 && !this.launchCooldown) {
           const allSettled = this.physics.bodies.every(b => b.isSettled);
           const noMerges = this.physics.mergeAnimations.length === 0;
           if (allSettled && noMerges) {
@@ -1616,6 +1787,7 @@ class Game {
     this.drawShrinkZones(ctx);
     this.drawPortals(ctx);
     this.drawRails(ctx);
+    this.drawRingGates(ctx);
     this.physics.draw(ctx);
     this.particles.draw(ctx);
     this.drawFloatingTexts(ctx);
@@ -1884,6 +2056,68 @@ class Game {
       }
 
       ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  }
+
+  drawRingGates(ctx) {
+    if (!this.physics.ringGates || !this.physics.ringGates.length) return;
+    const TWO_PI = Math.PI * 2;
+    const time = performance.now();
+
+    for (const gate of this.physics.ringGates) {
+      ctx.save();
+      const shimmer = Math.sin(time / 500) * 0.2 + 0.75;
+
+      // Chuẩn hóa khe hở sang radian [0, 2π), sắp xếp theo góc bắt đầu
+      const gaps = gate.gaps.map(g => ({
+        from: ((g.from % 360) + 360) % 360 * Math.PI / 180,
+        to:   ((g.to   % 360) + 360) % 360 * Math.PI / 180
+      })).sort((a, b) => a.from - b.from);
+
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'butt';
+
+      let cursor = 0;
+      for (const gap of gaps) {
+        const gFrom = gap.from;
+        const gTo   = gap.to > gap.from ? gap.to : gap.to + TWO_PI;
+
+        // Đoạn cứng trước khe hở
+        if (cursor < gFrom - 0.001) {
+          ctx.beginPath();
+          ctx.shadowColor = 'rgba(255, 200, 50, 0.55)';
+          ctx.shadowBlur = 10;
+          ctx.strokeStyle = `rgba(255, 200, 50, ${shimmer})`;
+          ctx.arc(gate.cx, gate.cy, gate.r, cursor, gFrom);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        // Khe hở: nét đứt mờ
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 200, 50, 0.22)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(gate.cx, gate.cy, gate.r, gFrom, gTo);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        cursor = gTo % TWO_PI;
+      }
+
+      // Đoạn cứng cuối cùng sau khe hở cuối
+      if (cursor < TWO_PI - 0.001) {
+        ctx.beginPath();
+        ctx.shadowColor = 'rgba(255, 200, 50, 0.55)';
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = `rgba(255, 200, 50, ${shimmer})`;
+        ctx.arc(gate.cx, gate.cy, gate.r, cursor, TWO_PI);
+        ctx.stroke();
+      }
+
       ctx.restore();
     }
   }

@@ -65,6 +65,7 @@ class PhysicsEngine {
     this.shrinkZones = []; // Mỗi entry: { x, y, width, height } — giảm tier 1 bậc khi đi qua
     this.portalPairs = []; // Mỗi entry: [portalA, portalB] — teleport fruit, redirect về core
     this.rails = [];       // Mỗi entry: { x1, y1, x2, y2 } — thanh deflector bật hướng fruit
+    this.ringGates = [];   // Mỗi entry: { cx, cy, r, gaps: [{from, to}] } — vòng chắn có khe hở (độ)
     this.bodies = [];
     this.gravity = 0.038; // Tăng trọng lực để nẩy nhanh dứt khoát
     this.damping = 0.985; // Tăng quán tính (bớt ma sát không khí) để quả bay lướt mượt mà hơn
@@ -397,13 +398,26 @@ class PhysicsEngine {
             const gdx = b.x - enX, gdy = b.y - enY;
             if (gdx * gdx + gdy * gdy <= er * er) {
               const vx = b.x - b.px, vy = b.y - b.py;
+              const speed = 1.8;
               // Map t along entry → same t along exit
               const ex = exit.x1 + et * (exit.x2 - exit.x1);
               const ey = exit.y1 + et * (exit.y2 - exit.y1);
-              b.x = ex; b.y = ey;
-              b.px = b.x - vx; b.py = b.y - vy;
+              // Tính normal của exit portal, chọn hướng trỏ vào gravity core
+              const exSegDx = exit.x2 - exit.x1, exSegDy = exit.y2 - exit.y1;
+              const exSegLen = Math.sqrt(exSegDx * exSegDx + exSegDy * exSegDy) || 1;
+              let inNx = exSegDy / exSegLen, inNy = -exSegDx / exSegLen;
+              const core = this.getNearestCenter(ex, ey);
+              if (inNx * (core.x - ex) + inNy * (core.y - ey) < 0) { inNx = -inNx; inNy = -inNy; }
+              // Đặt quả cách exit portal 1 bán kính theo hướng vào trong
+              b.x = ex + inNx * (er + 2);
+              b.y = ey + inNy * (er + 2);
+              // Velocity hướng về gravity core, giữ nguyên tốc độ
+              const cDx = core.x - b.x, cDy = core.y - b.y;
+              const cLen = Math.sqrt(cDx * cDx + cDy * cDy) || 1;
+              b.px = b.x - (cDx / cLen) * speed;
+              b.py = b.y - (cDy / cLen) * speed;
               b.isSettled = false;
-              b.portalCooldown = 20;
+              b.portalCooldown = 50;
               if (this._onPortal) this._onPortal(ex, ey);
               break;
             }
@@ -412,6 +426,46 @@ class PhysicsEngine {
       }
     }
     // ── End Portal Check ───────────────────────────────────────────────────
+
+    // ── Ring Gate Check ────────────────────────────────────────────────────
+    if (this.ringGates && this.ringGates.length > 0) {
+      for (const b of this.bodies) {
+        if (b.merged) continue;
+        const er = b.r * Math.min(1, b.scale || 1);
+        for (const gate of this.ringGates) {
+          const dx = b.x - gate.cx, dy = b.y - gate.cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 0.001 || Math.abs(dist - gate.r) > er + 2) continue;
+
+          // Kiểm tra xem góc của quả có nằm trong khe hở không
+          const angleDeg = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
+          let inGap = false;
+          for (const gap of gate.gaps) {
+            const gf = ((gap.from % 360) + 360) % 360;
+            const gt = ((gap.to   % 360) + 360) % 360;
+            if (gf <= gt) { if (angleDeg >= gf && angleDeg <= gt) { inGap = true; break; } }
+            else          { if (angleDeg >= gf || angleDeg <= gt) { inGap = true; break; } }
+          }
+          if (inGap) continue;
+
+          // Nẩy: phản xạ thành phần vận tốc theo hướng hướng tâm
+          const nx = dx / dist, ny = dy / dist;
+          const vx = b.x - b.px, vy = b.y - b.py;
+          const vDotN = vx * nx + vy * ny;
+          const isOutside = dist > gate.r;
+          if ((isOutside && vDotN < 0) || (!isOutside && vDotN > 0)) {
+            const restitution = 0.55;
+            b.px = b.x - (vx - (1 + restitution) * vDotN * nx);
+            b.py = b.y - (vy - (1 + restitution) * vDotN * ny);
+            const safeDist = isOutside ? gate.r + er + 1.5 : gate.r - er - 1.5;
+            b.x = gate.cx + nx * safeDist;
+            b.y = gate.cy + ny * safeDist;
+            b.isSettled = false;
+          }
+        }
+      }
+    }
+    // ── End Ring Gate Check ────────────────────────────────────────────────
 
     // ── Rail Deflectors ────────────────────────────────────────────────────
     if (this.rails && this.rails.length > 0) {

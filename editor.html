@@ -164,6 +164,7 @@
         <button class="tool-btn" data-tool="shrink">🟦 Vùng co</button>
         <button class="tool-btn" data-tool="portal">🌀 Cổng</button>
         <button class="tool-btn" data-tool="rail">🔵 Rail</button>
+        <button class="tool-btn" data-tool="ringgate">⭕ Ring Gate</button>
         <button class="tool-btn" data-tool="select">✋ Di chuyển</button>
       </div>
       <div id="tier-wrap" class="section" style="margin-top:10px;">
@@ -173,6 +174,13 @@
       <label class="field" id="bh-radius-wrap" style="margin-top:10px;display:none;">
         <span>Bán kính hố đen</span><input type="number" id="f-bhRadius" value="20">
       </label>
+      <div id="rg-wrap" style="margin-top:10px;display:none;">
+        <div class="row">
+          <label class="field"><span>Bán kính vòng</span><input type="number" id="f-rgRadius" value="120"></label>
+          <label class="field"><span>Khe hở (°)</span><input type="number" id="f-rgGap" value="50"></label>
+        </div>
+        <div style="font-size:0.75em;color:#a78fd6;margin-top:2px;">Click để đặt vòng (2 khe: trên + dưới)</div>
+      </div>
     </div>
 
     <div class="section actions">

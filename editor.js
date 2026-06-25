@@ -24,6 +24,9 @@ let fruitTier = 0;
 let bhRadius = 20;
 let fileHandle = null;  // FS Access handle to level.js (persisted across saves)
 
+let ringGateRadius = 120;
+let ringGateGapSize = 50;
+
 let isDragging = false; // shrink-zone / portal drag
 let dragStart = null, dragCur = null;
 let portalPending = null; // first rectangle of an in-progress portal pair
@@ -43,6 +46,7 @@ function ensureArrays(l) {
   l.shrinkZones = l.shrinkZones || [];
   l.portalPairs = l.portalPairs || [];
   l.rails = l.rails || [];
+  l.ringGates = l.ringGates || [];
   l.preplaced = l.preplaced || [];
   l.goals = l.goals || [];
   l.starScores = l.starScores || [0, 0, 0];
@@ -98,7 +102,7 @@ function buildLevelSelect() {
   levels.forEach((l, i) => {
     const o = document.createElement('option');
     o.value = String(i);
-    o.textContent = `Level ${l.id}`;
+    o.textContent = l.id === 0 ? '🎓 Tutorial' : `Level ${l.id}`;
     sel.appendChild(o);
   });
   sel.onchange = () => selectLevel(sel.value);
@@ -150,6 +154,8 @@ function bindInputs() {
   document.getElementById('f-star2').addEventListener('input', e => { L.starScores[1] = parseInt(e.target.value, 10) || 0; updateExport(); });
   document.getElementById('f-star3').addEventListener('input', e => { L.starScores[2] = parseInt(e.target.value, 10) || 0; updateExport(); });
   document.getElementById('f-bhRadius').addEventListener('input', e => { bhRadius = parseInt(e.target.value, 10) || 20; });
+  document.getElementById('f-rgRadius').addEventListener('input', e => { ringGateRadius = parseInt(e.target.value, 10) || 120; });
+  document.getElementById('f-rgGap').addEventListener('input', e => { ringGateGapSize = parseInt(e.target.value, 10) || 50; });
 }
 
 // ───────────────────────── Goals UI ─────────────────────────
@@ -222,6 +228,7 @@ function setTool(t) {
   document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
   document.getElementById('tier-wrap').style.display = (t === 'fruit') ? '' : 'none';
   document.getElementById('bh-radius-wrap').style.display = (t === 'blackhole') ? '' : 'none';
+  document.getElementById('rg-wrap').style.display = (t === 'ringgate') ? '' : 'none';
   updateHint();
   render();
 }
@@ -247,6 +254,7 @@ const HINTS = {
   center: 'Click để đặt <b>lõi hấp dẫn</b>. Không đặt lõi nào = dùng tâm mặc định (260,340). Chuột phải để xoá.',
   blackhole: 'Click để đặt <b>hố đen</b> (quả chạm vào biến mất). Chuột phải để xoá.',
   shrink: '<b>Kéo</b> để vẽ <b>vùng co</b> (quả đi qua bị giảm 1 tier). Chuột phải để xoá.',
+  ringgate: '<b>Click</b> để đặt <b style="color:#ffcc32">Ring Gate</b> (vòng chắn + khe hở trên/dưới). Chuột phải để xoá.',
   portal: '<b>Kéo lần 1</b> vẽ cổng <b style="color:#ff6b35">A</b>, <b>kéo lần 2</b> vẽ cổng <b style="color:#ff6b35">B</b> → thành 1 cặp. Kéo ngang = portal ngang, kéo dọc = portal dọc. Chuột phải xoá cả cặp.',
   rail: '<b>Click điểm đầu</b>, rồi <b>click điểm cuối</b> để vẽ <b style="color:#a8edff">thanh deflector</b>. Quả bật vào thanh sẽ đổi hướng. Chuột phải hoặc <kbd>Del</kbd> để xoá.',
   select: '<b>Kéo</b> vật thể để di chuyển vị trí. Chuột phải hoặc <kbd>Del</kbd> để xoá.'
@@ -321,6 +329,11 @@ function deleteAt(p) {
     const r = L.rails[i];
     if (distToSegment(p, r.x1, r.y1, r.x2, r.y2) <= 8) { L.rails.splice(i, 1); return commit(); }
   }
+  for (let i = 0; i < (L.ringGates || []).length; i++) {
+    const g = L.ringGates[i];
+    const d = Math.hypot(p.x - g.cx, p.y - g.cy);
+    if (Math.abs(d - g.r) <= 10 || d <= 10) { L.ringGates.splice(i, 1); return commit(); }
+  }
 }
 
 function leftClick(p) {
@@ -332,6 +345,15 @@ function leftClick(p) {
   }
   if (tool === 'center') { L.centers.push({ x: p.x, y: p.y }); return commit(); }
   if (tool === 'blackhole') { L.blackHoles.push({ x: p.x, y: p.y, radius: bhRadius }); return commit(); }
+  if (tool === 'ringgate') {
+    const half = ringGateGapSize / 2;
+    L.ringGates = L.ringGates || [];
+    L.ringGates.push({ cx: p.x, cy: p.y, r: ringGateRadius, gaps: [
+      { from: 270 - half, to: 270 + half },
+      { from: 90  - half, to: 90  + half }
+    ]});
+    return commit();
+  }
   // portal: handled by drag in bindCanvas
   if (tool === 'rail') {
     if (railStart) {
@@ -508,6 +530,41 @@ function render() {
     ctx.restore();
   }
 
+  // ring gates
+  const TWO_PI = Math.PI * 2;
+  (L.ringGates || []).forEach(gate => {
+    ctx.save();
+    const gaps = gate.gaps.map(g => ({
+      from: ((g.from % 360) + 360) % 360 * Math.PI / 180,
+      to:   ((g.to   % 360) + 360) % 360 * Math.PI / 180
+    })).sort((a, b) => a.from - b.from);
+
+    ctx.lineWidth = 5; ctx.lineCap = 'butt';
+    let cursor = 0;
+    for (const gap of gaps) {
+      const gFrom = gap.from;
+      const gTo   = gap.to > gap.from ? gap.to : gap.to + TWO_PI;
+      if (cursor < gFrom - 0.001) {
+        ctx.beginPath(); ctx.shadowColor = 'rgba(255,200,50,0.5)'; ctx.shadowBlur = 8;
+        ctx.strokeStyle = 'rgba(255,200,50,0.9)';
+        ctx.arc(gate.cx, gate.cy, gate.r, cursor, gFrom); ctx.stroke(); ctx.shadowBlur = 0;
+      }
+      ctx.save(); ctx.strokeStyle = 'rgba(255,200,50,0.2)'; ctx.lineWidth = 2; ctx.setLineDash([5,5]);
+      ctx.beginPath(); ctx.arc(gate.cx, gate.cy, gate.r, gFrom, gTo); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+      cursor = gTo % TWO_PI;
+    }
+    if (cursor < TWO_PI - 0.001) {
+      ctx.beginPath(); ctx.shadowColor = 'rgba(255,200,50,0.5)'; ctx.shadowBlur = 8;
+      ctx.strokeStyle = 'rgba(255,200,50,0.9)';
+      ctx.arc(gate.cx, gate.cy, gate.r, cursor, TWO_PI); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,200,50,0.6)';
+    ctx.beginPath(); ctx.arc(gate.cx, gate.cy, 5, 0, TWO_PI); ctx.fill();
+    label(ctx, `⭕ r=${gate.r}`, gate.cx, gate.cy - gate.r - 12, '#ffcc32');
+    ctx.restore();
+  });
+
   // black holes
   L.blackHoles.forEach(bh => {
     const g = ctx.createRadialGradient(bh.x, bh.y, 1, bh.x, bh.y, bh.radius);
@@ -572,6 +629,14 @@ function objArray(items, keys) {
   const rows = items.map(it => `${PI}  { ${keys.map(k => `${k}: ${typeof it[k] === 'string' ? q(it[k]) : n(it[k])}`).join(', ')} }`);
   return `[\n${rows.join(',\n')}\n${PI}]`;
 }
+function ringGateArray(gates) {
+  const rows = gates.map(g => {
+    const gapStr = g.gaps.map(gap => `{ from: ${n(gap.from)}, to: ${n(gap.to)} }`).join(', ');
+    return `${PI}  { cx: ${n(g.cx)}, cy: ${n(g.cy)}, r: ${n(g.r)}, gaps: [${gapStr}] }`;
+  });
+  return `[\n${rows.join(',\n')}\n${PI}]`;
+}
+
 function portalArray(pairs) {
   const rows = pairs.map(pair => {
     const rs = pair.map(p => `{ x1: ${n(p.x1)}, y1: ${n(p.y1)}, x2: ${n(p.x2)}, y2: ${n(p.y2)} }`);
@@ -595,6 +660,7 @@ function serializeLevel(l) {
   if (l.shrinkZones && l.shrinkZones.length) lines.push(`${PI}shrinkZones: ${objArray(l.shrinkZones, ['x1', 'y1', 'x2', 'y2'])},`);
   if (l.portalPairs && l.portalPairs.length) lines.push(`${PI}portalPairs: ${portalArray(l.portalPairs)},`);
   if (l.rails && l.rails.length) lines.push(`${PI}rails: ${objArray(l.rails, ['x1', 'y1', 'x2', 'y2'])},`);
+  if (l.ringGates && l.ringGates.length) lines.push(`${PI}ringGates: ${ringGateArray(l.ringGates)},`);
   if (l.preplaced && l.preplaced.length) lines.push(`${PI}preplaced: ${objArray(l.preplaced, ['tier', 'x', 'y'])},`);
   lines.push(`${PI}goals: [`);
   l.goals.forEach((g, i) => {
@@ -613,7 +679,7 @@ function serializeLevelsArray(arr) {
 // Working level → clean output object (drop empty optional arrays, reset goal progress)
 function cleanLevel(l) {
   const c = clone(l);
-  ['centers', 'blackHoles', 'shrinkZones', 'portalPairs', 'rails', 'preplaced'].forEach(k => {
+  ['centers', 'blackHoles', 'shrinkZones', 'portalPairs', 'rails', 'ringGates', 'preplaced'].forEach(k => {
     if (!c[k] || !c[k].length) delete c[k];
   });
   c.goals = (c.goals || []).map(g => g.type === 'fruit'
@@ -647,7 +713,7 @@ function bindActions() {
     renderGoals(); updateExport();
   };
   document.getElementById('clear-field-btn').onclick = () => {
-    L.centers = []; L.blackHoles = []; L.shrinkZones = []; L.portalPairs = []; L.rails = []; L.preplaced = [];
+    L.centers = []; L.blackHoles = []; L.shrinkZones = []; L.portalPairs = []; L.rails = []; L.ringGates = []; L.preplaced = [];
     portalPending = null; commit();
     setStatus('Đã xoá hết vật thể trên sân.');
   };
