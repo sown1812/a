@@ -55,7 +55,7 @@ class Game {
     this.currentFruitTier = 0;
     this.nextFruitTier = 0;
     this.launchCooldown = false;
-    this.cooldownTime = 600; // Tăng delay từ 350ms lên 750ms để tránh user spam bắn quả liên tục
+    this.cooldownTime = 500; // Tăng delay từ 350ms lên 750ms để tránh user spam bắn quả liên tục
 
     this.overflowTimer = 0;
     this.overflowDuration = 3.0;
@@ -506,9 +506,11 @@ class Game {
     this.physics.blackHoles = [];
     this.physics.shrinkZones = [];
     this.physics.portalPairs = [];
+    this.physics.rails = [];
     this.physics._onAbsorb = null;
     this.physics._onShrink = null;
     this.physics._onPortal = null;
+    this.physics._onRailBounce = null;
 
     // Infinite spawns — tutorial only needs ~3 shots
     this.levelManager.remainingSpawns = 999;
@@ -636,9 +638,9 @@ class Game {
       this.particles.spawnBlackHoleAbsorption(x, y);
     };
 
-    // Shrink zones: rectangular membranes that drop fruit tier by 1 on entry
+    // Shrink zones: line-segment membranes that drop fruit tier by 1 on entry
     if (lvl.shrinkZones && lvl.shrinkZones.length) {
-      this.physics.shrinkZones = lvl.shrinkZones.map(z => ({ x: z.x, y: z.y, width: z.width, height: z.height }));
+      this.physics.shrinkZones = lvl.shrinkZones.map(z => ({ x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2 }));
     } else {
       this.physics.shrinkZones = [];
     }
@@ -646,17 +648,23 @@ class Game {
       if (body.tier > 0) this.morphFruit(body, body.tier - 1);
     };
 
-    // Portal pairs: teleport fruit between two rectangles, velocity redirected toward core
+    // Portal pairs: teleport fruit between two line segments
     if (lvl.portalPairs && lvl.portalPairs.length) {
       this.physics.portalPairs = lvl.portalPairs.map(pair =>
-        pair.map(p => ({ x: p.x, y: p.y, width: p.width, height: p.height }))
+        pair.map(p => ({ x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 }))
       );
     } else {
       this.physics.portalPairs = [];
     }
-    this.physics._onPortal = (x, y) => {
-      this.particles.spawnMergeEffect(x, y, '#a855f7', 10);
-    };
+    this.physics._onPortal = null;
+
+    // Rails: deflector segments that bounce fruits
+    if (lvl.rails && lvl.rails.length) {
+      this.physics.rails = lvl.rails.map(r => ({ x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 }));
+    } else {
+      this.physics.rails = [];
+    }
+    this.physics._onRailBounce = null;
 
     // Pre-placed fruits: seed the field with already-settled fruit defined by the level
     if (lvl.preplaced && lvl.preplaced.length) {
@@ -1121,7 +1129,6 @@ class Game {
         return;
       }
       this.morphFruit(body, body.tier + 1);
-      this.levelManager.trackMergeGoal(body.tier);
       this.updateHUDGoals();
     }
 
@@ -1313,8 +1320,6 @@ class Game {
       newBody.targetScale = 1.0;
       newBody.growthPhase = true; // Khi scale < 0.95, không apply full collision force
 
-      // Track merge goal: increment counter when tier is created
-      this.levelManager.trackMergeGoal(nextTier);
       this.updateHUDGoals();
     } else {
       this.particles.spawnWatermelonExplosion(midX, midY);
@@ -1333,8 +1338,6 @@ class Game {
         rot: (Math.random() - 0.5) * 0.4
       });
 
-      // Track merge goal for max tier
-      this.levelManager.trackMergeGoal(nextTier);
       this.updateHUDGoals();
     }
 
@@ -1612,6 +1615,7 @@ class Game {
     this.drawBlackHoles(ctx);
     this.drawShrinkZones(ctx);
     this.drawPortals(ctx);
+    this.drawRails(ctx);
     this.physics.draw(ctx);
     this.particles.draw(ctx);
     this.drawFloatingTexts(ctx);
@@ -1641,6 +1645,16 @@ class Game {
       ctx.stroke();
     }
 
+    // Orbit radius ring — solid line showing the launcher's travel path (always centered on canvas center)
+    if (this.orbitPath !== 'figure8') {
+      ctx.strokeStyle = 'rgba(180, 140, 255, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(this.cx, this.cy, this.orbitRadius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
     // Warning boundary line (dashed pink ring) — one per gravity well
     if (this.isOverflowing) {
       ctx.strokeStyle = 'rgba(255, 94, 151, 0.6)';
@@ -1656,7 +1670,7 @@ class Game {
       ctx.arc(c.x, c.y, this.warningLimit, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.setLineDash([]); // Reset line dash to prevent leakage to physical bodies drawing
+    ctx.setLineDash([]);
     ctx.restore();
   }
 
@@ -1666,89 +1680,89 @@ class Game {
     }
   }
 
+  drawBlackHole(ctx, bh, time) {
+    const GLOW_SCALE  = 1.4;  // glow radius = radius * this
+    const GLOW_PULSE  = 0.08; // pulse amplitude as fraction of radius
+    const SHADOW_BLUR = 0.5;  // shadowBlur = radius * this
+
+    ctx.save();
+
+    // Outer glow halo
+    const pulseR = bh.radius * GLOW_SCALE + Math.sin(time / 220) * (bh.radius * GLOW_PULSE);
+    const outerGlow = ctx.createRadialGradient(bh.x, bh.y, bh.radius * 0.5, bh.x, bh.y, pulseR);
+    outerGlow.addColorStop(0, 'rgba(108, 52, 131, 0.55)');
+    outerGlow.addColorStop(0.5, 'rgba(26, 5, 51, 0.20)');
+    outerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = outerGlow;
+    ctx.beginPath();
+    ctx.arc(bh.x, bh.y, pulseR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Black core
+    ctx.shadowColor = 'rgba(108, 52, 131, 0.9)';
+    ctx.shadowBlur = bh.radius * SHADOW_BLUR;
+    const coreGrad = ctx.createRadialGradient(
+      bh.x - bh.radius * 0.28, bh.y - bh.radius * 0.28, 1,
+      bh.x, bh.y, bh.radius
+    );
+    coreGrad.addColorStop(0, '#1a0030');
+    coreGrad.addColorStop(0.6, '#0d001a');
+    coreGrad.addColorStop(1, '#000000');
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.arc(bh.x, bh.y, bh.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Specular highlight
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(200, 140, 255, 0.30)';
+    ctx.beginPath();
+    ctx.arc(bh.x - bh.radius * 0.32, bh.y - bh.radius * 0.32, bh.radius * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
   drawBlackHoles(ctx) {
     if (!this.physics.blackHoles || !this.physics.blackHoles.length) return;
     const time = performance.now();
-    for (const bh of this.physics.blackHoles) {
-      ctx.save();
-
-      // Outer glow halo
-      const pulseR = bh.radius * 2.8 + Math.sin(time / 220) * 3;
-      const outerGlow = ctx.createRadialGradient(bh.x, bh.y, bh.radius * 0.5, bh.x, bh.y, pulseR);
-      outerGlow.addColorStop(0, 'rgba(108, 52, 131, 0.55)');
-      outerGlow.addColorStop(0.4, 'rgba(26, 5, 51, 0.28)');
-      outerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = outerGlow;
-      ctx.beginPath();
-      ctx.arc(bh.x, bh.y, pulseR, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Rotating dashed event-horizon ring
-      ctx.save();
-      ctx.translate(bh.x, bh.y);
-      ctx.rotate((time / 600) % (Math.PI * 2));
-      ctx.strokeStyle = 'rgba(180, 100, 220, 0.55)';
-      ctx.lineWidth = 1.8;
-      ctx.setLineDash([4, 7]);
-      ctx.beginPath();
-      ctx.arc(0, 0, bh.radius * 1.55, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-
-      // Black core
-      ctx.shadowColor = 'rgba(108, 52, 131, 0.9)';
-      ctx.shadowBlur = 14;
-      const coreGrad = ctx.createRadialGradient(
-        bh.x - bh.radius * 0.28, bh.y - bh.radius * 0.28, 1,
-        bh.x, bh.y, bh.radius
-      );
-      coreGrad.addColorStop(0, '#1a0030');
-      coreGrad.addColorStop(0.6, '#0d001a');
-      coreGrad.addColorStop(1, '#000000');
-      ctx.fillStyle = coreGrad;
-      ctx.beginPath();
-      ctx.arc(bh.x, bh.y, bh.radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Specular highlight
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = 'rgba(200, 140, 255, 0.30)';
-      ctx.beginPath();
-      ctx.arc(bh.x - bh.radius * 0.32, bh.y - bh.radius * 0.32, bh.radius * 0.18, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
-    }
+    for (const bh of this.physics.blackHoles) this.drawBlackHole(ctx, bh, time);
   }
 
   drawShrinkZones(ctx) {
     if (!this.physics.shrinkZones || !this.physics.shrinkZones.length) return;
     const time = performance.now();
     for (const zone of this.physics.shrinkZones) {
+      const len = Math.hypot(zone.x2 - zone.x1, zone.y2 - zone.y1);
+      if (len < 1) continue;
       ctx.save();
       const shimmer = Math.sin(time / 350) * 0.15 + 0.5;
 
-      // Glow border
+      // Glowing line
       ctx.shadowColor = 'rgba(0, 220, 255, 0.9)';
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 14;
       ctx.strokeStyle = `rgba(0, 220, 255, ${shimmer + 0.2})`;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([7, 5]);
-      ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.setLineDash([12, 7]);
+      ctx.beginPath();
+      ctx.moveTo(zone.x1, zone.y1);
+      ctx.lineTo(zone.x2, zone.y2);
+      ctx.stroke();
       ctx.setLineDash([]);
 
-      // Translucent fill
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = `rgba(0, 200, 255, ${shimmer * 0.12})`;
-      ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
-
-      // Label
-      ctx.font = 'bold 9px sans-serif';
-      ctx.fillStyle = `rgba(120, 230, 255, 0.85)`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('▼ SHRINK ▼', zone.x + zone.width / 2, zone.y + zone.height / 2);
+      // Arrow at midpoint
+      const cx = (zone.x1 + zone.x2) / 2, cy = (zone.y1 + zone.y2) / 2;
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = 'rgba(0,220,255,0.6)';
+      ctx.fillStyle = `rgba(0, 220, 255, ${shimmer * 0.9})`;
+      const hw = 6, hh = 5;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + hh);
+      ctx.lineTo(cx - hw, cy - hh);
+      ctx.lineTo(cx + hw, cy - hh);
+      ctx.closePath();
+      ctx.fill();
 
       ctx.restore();
     }
@@ -1757,65 +1771,120 @@ class Game {
   drawPortals(ctx) {
     if (!this.physics.portalPairs || !this.physics.portalPairs.length) return;
     const time = performance.now();
-    // Màu cho từng cặp portal: [cam, tím, xanh lá...]
     const COLORS = ['#ff6b35', '#a855f7', '#22c55e'];
+    const SEG_LABELS = ['A', 'B'];
 
     for (let pi = 0; pi < this.physics.portalPairs.length; pi++) {
       const pair = this.physics.portalPairs[pi];
       const color = COLORS[pi % COLORS.length];
-      const labels = ['A', 'B'];
 
       for (let si = 0; si < 2; si++) {
         const p = pair[si];
-        const cx = p.x + p.width  / 2;
-        const cy = p.y + p.height / 2;
+        const len = Math.hypot(p.x2 - p.x1, p.y2 - p.y1);
+        if (len < 1) continue;
+        const cx = (p.x1 + p.x2) / 2, cy = (p.y1 + p.y2) / 2;
         const pulse = Math.sin(time / 280 + si * Math.PI) * 0.18 + 0.72;
+        const dx = (p.x2 - p.x1) / len, dy = (p.y2 - p.y1) / len;
+
         ctx.save();
 
-        // Outer glow
+        // Glowing line
         ctx.shadowColor = color;
-        ctx.shadowBlur = 16;
-        ctx.strokeStyle = color.replace(')', `, ${pulse})`).replace('rgb', 'rgba').replace('#', 'rgba(') ;
-        // Dùng cách đơn giản hơn:
+        ctx.shadowBlur = 18;
         ctx.globalAlpha = pulse;
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
-        ctx.setLineDash([5, 4]);
-        ctx.strokeRect(p.x, p.y, p.width, p.height);
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.setLineDash([8, 5]);
+        ctx.beginPath();
+        ctx.moveTo(p.x1, p.y1);
+        ctx.lineTo(p.x2, p.y2);
+        ctx.stroke();
         ctx.setLineDash([]);
 
-        // Fill mờ
-        ctx.globalAlpha = pulse * 0.18;
-        ctx.fillStyle = color;
-        ctx.fillRect(p.x, p.y, p.width, p.height);
-
-        // Inner swirl lines (animate)
-        ctx.globalAlpha = pulse * 0.55;
+        // Inner swirl at midpoint
+        ctx.globalAlpha = pulse * 0.5;
         const rot = (time / 500 + si * Math.PI) % (Math.PI * 2);
-        const half = Math.min(p.width, p.height) * 0.38;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1.5;
-        ctx.shadowBlur = 6;
+        ctx.lineWidth = 1.4;
+        ctx.shadowBlur = 5;
         for (let i = 0; i < 3; i++) {
           const a = rot + (i * Math.PI * 2) / 3;
           ctx.beginPath();
           ctx.moveTo(cx, cy);
-          ctx.lineTo(cx + Math.cos(a) * half, cy + Math.sin(a) * half);
+          ctx.lineTo(cx + Math.cos(a) * 8, cy + Math.sin(a) * 8);
           ctx.stroke();
         }
 
-        // Label
+        // Arrows along the segment toward center
+        ctx.globalAlpha = pulse * 0.85;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.8;
+        ctx.shadowBlur = 5;
+        const arrowOffset = len * 0.22;
+        const arrowAnim = Math.sin(time / 350) * len * 0.04;
+        const arrowHW = 5;
+        for (const d of [-1, 1]) {
+          const tipX = cx + d * dx * (arrowOffset + arrowAnim);
+          const tipY = cy + d * dy * (arrowOffset + arrowAnim);
+          const tailX = cx + d * dx * (arrowOffset + arrowHW * 2 + arrowAnim);
+          const tailY = cy + d * dy * (arrowOffset + arrowHW * 2 + arrowAnim);
+          ctx.beginPath();
+          ctx.moveTo(tailX, tailY);
+          ctx.lineTo(tipX, tipY);
+          ctx.stroke();
+          // Arrowhead pointing toward center
+          const headAng = d > 0 ? Math.atan2(-dy, -dx) : Math.atan2(dy, dx);
+          ctx.beginPath();
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(tipX + Math.cos(headAng + 0.5) * arrowHW, tipY + Math.sin(headAng + 0.5) * arrowHW);
+          ctx.lineTo(tipX + Math.cos(headAng - 0.5) * arrowHW, tipY + Math.sin(headAng - 0.5) * arrowHW);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Label near the start of the segment (perpendicular offset)
         ctx.globalAlpha = 0.9;
         ctx.shadowBlur = 0;
-        ctx.font = `bold ${Math.min(p.width, p.height) * 0.45}px sans-serif`;
+        ctx.font = 'bold 12px sans-serif';
         ctx.fillStyle = color;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(labels[si], cx, cy);
+        ctx.fillText(SEG_LABELS[si], p.x1 - dy * 14, p.y1 + dx * 14);
 
         ctx.globalAlpha = 1;
         ctx.restore();
       }
+    }
+  }
+
+  drawRails(ctx) {
+    if (!this.physics.rails || !this.physics.rails.length) return;
+    for (const rail of this.physics.rails) {
+      const len = Math.hypot(rail.x2 - rail.x1, rail.y2 - rail.y1);
+      if (len < 1) continue;
+      ctx.save();
+
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(rail.x1, rail.y1);
+      ctx.lineTo(rail.x2, rail.y2);
+      ctx.stroke();
+
+      // Endpoint dots
+      ctx.fillStyle = '#000000';
+      for (const [ex, ey] of [[rail.x1, rail.y1], [rail.x2, rail.y2]]) {
+        ctx.beginPath();
+        ctx.arc(ex, ey, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.restore();
     }
   }
 
@@ -1914,9 +1983,20 @@ class Game {
     ctx.restore();
 
     // Draw the fruit directly at lx, ly since there is no spaceship (drawn upright)
+    // White border ring around launcher fruit
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(lx, ly, config.r + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = config.color;
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+    ctx.restore();
+
     this.physics.drawFruitBody(ctx, lx, ly, config.r, this.currentFruitTier, 0);
     const _ct = this.currentFruitTier;
-    if (_ct !== 1 && _ct !== 2 && _ct !== 3 && _ct !== 4 && _ct !== 5) {
+    if (_ct > 9) {
       this.physics.drawFace(ctx, lx, ly, config.r, false, 'normal', _ct);
     }
 

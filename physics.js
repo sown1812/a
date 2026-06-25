@@ -64,6 +64,7 @@ class PhysicsEngine {
     this.blackHoles = []; // Mỗi entry: { x, y, radius } — hút và hủy fruit
     this.shrinkZones = []; // Mỗi entry: { x, y, width, height } — giảm tier 1 bậc khi đi qua
     this.portalPairs = []; // Mỗi entry: [portalA, portalB] — teleport fruit, redirect về core
+    this.rails = [];       // Mỗi entry: { x1, y1, x2, y2 } — thanh deflector bật hướng fruit
     this.bodies = [];
     this.gravity = 0.038; // Tăng trọng lực để nẩy nhanh dứt khoát
     this.damping = 0.985; // Tăng quán tính (bớt ma sát không khí) để quả bay lướt mượt mà hơn
@@ -350,14 +351,19 @@ class PhysicsEngine {
     // ── End Black Hole Absorption ──────────────────────────────────────────
 
     // ── Shrink Zone Check ──────────────────────────────────────────────────
-    // Mỗi frame kiểm tra từng body với từng zone hình chữ nhật.
+    // Mỗi frame kiểm tra từng body với từng zone (line segment).
     // inShrinkZone flag ngăn shrink nhiều lần trong 1 lần đi qua; reset khi ra khỏi zone.
     if (this.shrinkZones && this.shrinkZones.length > 0) {
+      const SHRINK_THICK = 18; // half-width of the shrink strip in pixels
       for (const b of this.bodies) {
         let insideAny = false;
         for (const zone of this.shrinkZones) {
-          if (b.x >= zone.x && b.x <= zone.x + zone.width &&
-              b.y >= zone.y && b.y <= zone.y + zone.height) {
+          const zdx = zone.x2 - zone.x1, zdy = zone.y2 - zone.y1;
+          const zlenSq = zdx * zdx + zdy * zdy;
+          if (zlenSq < 1) continue;
+          const zt = Math.max(0, Math.min(1, ((b.x - zone.x1) * zdx + (b.y - zone.y1) * zdy) / zlenSq));
+          const znX = zone.x1 + zt * zdx, znY = zone.y1 + zt * zdy;
+          if (Math.hypot(b.x - znX, b.y - znY) <= SHRINK_THICK) {
             insideAny = true;
             if (!b.inShrinkZone) {
               b.inShrinkZone = true;
@@ -372,46 +378,32 @@ class PhysicsEngine {
     // ── End Shrink Zone Check ──────────────────────────────────────────────
 
     // ── Portal Check ───────────────────────────────────────────────────────
-    // Khi THÂN quả chạm 1 trong 2 portal của cặp (không cần tâm đi qua chính giữa) →
-    // teleport sang portal kia, redirect velocity về gravity core (giữ tốc độ).
-    // Dùng kiểm tra giao nhau hình tròn–chữ nhật: lấy điểm gần nhất trên cổng tới
-    // tâm quả, nếu khoảng cách ≤ bán kính quả thì coi là đã chạm. portalCooldown ngăn ping-pong.
+    // Khi THÂN quả chạm 1 trong 2 portal (line segment) của cặp →
+    // teleport sang portal kia, giữ nguyên vận tốc. portalCooldown ngăn ping-pong.
     if (this.portalPairs && this.portalPairs.length > 0) {
       for (const b of this.bodies) {
         if (b.portalCooldown > 0) { b.portalCooldown -= dt; continue; }
-        const er = b.r * Math.min(1, b.scale || 1); // bán kính hiệu dụng (tính cả scale lúc sinh)
+        const er = b.r * Math.min(1, b.scale || 1);
         for (const pair of this.portalPairs) {
           for (let pi = 0; pi < 2; pi++) {
             const entry = pair[pi];
             const exit  = pair[1 - pi];
-            // Điểm trên hình chữ nhật cổng gần tâm quả nhất
-            const nx = Math.max(entry.x, Math.min(b.x, entry.x + entry.width));
-            const ny = Math.max(entry.y, Math.min(b.y, entry.y + entry.height));
-            const gdx = b.x - nx, gdy = b.y - ny;
+            const edx = entry.x2 - entry.x1, edy = entry.y2 - entry.y1;
+            const elenSq = edx * edx + edy * edy;
+            if (elenSq < 1) continue;
+            // t = closest point on entry segment; gdist = distance from fruit center to segment
+            const et = Math.max(0, Math.min(1, ((b.x - entry.x1) * edx + (b.y - entry.y1) * edy) / elenSq));
+            const enX = entry.x1 + et * edx, enY = entry.y1 + et * edy;
+            const gdx = b.x - enX, gdy = b.y - enY;
             if (gdx * gdx + gdy * gdy <= er * er) {
-              // Tính tốc độ hiện tại (Verlet: v = pos - prevPos)
-              const vx = b.x - b.px;
-              const vy = b.y - b.py;
-              const speed = Math.sqrt(vx * vx + vy * vy) || 2;
-
-              // Teleport sang center của exit portal
-              const ex = exit.x + exit.width  / 2;
-              const ey = exit.y + exit.height / 2;
-              b.x  = ex;
-              b.y  = ey;
-
-              // Hướng velocity vào gravity core gần nhất
-              const core = this.getNearestCenter(ex, ey);
-              const ddx = core.x - ex;
-              const ddy = core.y - ey;
-              const dlen = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
-              b.px = b.x - (ddx / dlen) * speed;
-              b.py = b.y - (ddy / dlen) * speed;
-
+              const vx = b.x - b.px, vy = b.y - b.py;
+              // Map t along entry → same t along exit
+              const ex = exit.x1 + et * (exit.x2 - exit.x1);
+              const ey = exit.y1 + et * (exit.y2 - exit.y1);
+              b.x = ex; b.y = ey;
+              b.px = b.x - vx; b.py = b.y - vy;
               b.isSettled = false;
-              b.portalCooldown = 20; // ~0.33s buffer
-              b.expression = 'surprised';
-              b.expressionTimer = 35;
+              b.portalCooldown = 20;
               if (this._onPortal) this._onPortal(ex, ey);
               break;
             }
@@ -420,6 +412,40 @@ class PhysicsEngine {
       }
     }
     // ── End Portal Check ───────────────────────────────────────────────────
+
+    // ── Rail Deflectors ────────────────────────────────────────────────────
+    if (this.rails && this.rails.length > 0) {
+      for (const b of this.bodies) {
+        if (b.merged) continue;
+        const effectiveR = b.r * Math.min(1, b.scale);
+        for (const rail of this.rails) {
+          const dx = rail.x2 - rail.x1, dy = rail.y2 - rail.y1;
+          const lenSq = dx * dx + dy * dy;
+          if (lenSq < 1) continue;
+          // Closest point on segment
+          const t = Math.max(0, Math.min(1, ((b.x - rail.x1) * dx + (b.y - rail.y1) * dy) / lenSq));
+          const cpx = rail.x1 + t * dx, cpy = rail.y1 + t * dy;
+          const distX = b.x - cpx, distY = b.y - cpy;
+          const dist = Math.sqrt(distX * distX + distY * distY);
+          if (dist < effectiveR && dist > 0.001) {
+            const nx = distX / dist, ny = distY / dist; // normal pointing away from rail
+            const vx = b.x - b.px, vy = b.y - b.py;
+            const dot = vx * nx + vy * ny;
+            if (dot < 0) { // only reflect if approaching rail
+              const restitution = 0.6;
+              b.px = b.x - (vx - (1 + restitution) * dot * nx);
+              b.py = b.y - (vy - (1 + restitution) * dot * ny);
+            }
+            // Push body clear of the rail surface
+            b.x = cpx + nx * effectiveR;
+            b.y = cpy + ny * effectiveR;
+            b.isSettled = false;
+            if (this._onRailBounce) this._onRailBounce(cpx, cpy);
+          }
+        }
+      }
+    }
+    // ── End Rail Deflectors ────────────────────────────────────────────────
 
     // 2. Resolve Constraints & Collisions
     const iterations = this.isPerfMode ? 5 : 8;
@@ -532,7 +558,7 @@ class PhysicsEngine {
           // Merge zone: slightly larger than collision radius so fruits feel responsive
           // even when visually just touching (not overlapping in physics)
           if (step === iterations - 1) {
-            const MERGE_TOLERANCE = 2;
+            const MERGE_TOLERANCE = 7;
             const mergeDist = r1 + r2 + MERGE_TOLERANCE;
             if (distSq < mergeDist * mergeDist) {
               if (b1.tier === b2.tier && !b1.merged && !b2.merged &&

@@ -76,6 +76,7 @@
 
     /* tool palette */
     .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .tools .tool-btn:last-child:nth-child(3n+1) { grid-column: 1 / -1; } /* full-width nếu lẻ */
     .tool-btn { background: #2f1f55; border: 1px solid #4a356f; padding: 8px 4px; font-size: 0.78em; }
     .tool-btn.active { background: #6c3fd4; border-color: #9b6bff; box-shadow: 0 0 0 2px rgba(155,107,255,0.4); }
 
@@ -162,6 +163,7 @@
         <button class="tool-btn" data-tool="blackhole">🕳️ Hố đen</button>
         <button class="tool-btn" data-tool="shrink">🟦 Vùng co</button>
         <button class="tool-btn" data-tool="portal">🌀 Cổng</button>
+        <button class="tool-btn" data-tool="rail">🔵 Rail</button>
         <button class="tool-btn" data-tool="select">✋ Di chuyển</button>
       </div>
       <div id="tier-wrap" class="section" style="margin-top:10px;">

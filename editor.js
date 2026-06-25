@@ -24,11 +24,14 @@ let fruitTier = 0;
 let bhRadius = 20;
 let fileHandle = null;  // FS Access handle to level.js (persisted across saves)
 
-let isDragging = false; // shrink-zone drag
+let isDragging = false; // shrink-zone / portal drag
 let dragStart = null, dragCur = null;
 let portalPending = null; // first rectangle of an in-progress portal pair
+let railStart = null;     // first endpoint of an in-progress rail segment
+let hoverPos = null;      // current mouse position (for in-progress rail preview)
 let dragObj = null;       // object being repositioned with the select tool
 let dragOffset = null;    // grab offset so the object follows the cursor smoothly
+let dragSegOrig = null;   // original {x1,y1,x2,y2} when dragging a line segment
 
 // ───────────────────────── Helpers ─────────────────────────
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -39,6 +42,7 @@ function ensureArrays(l) {
   l.blackHoles = l.blackHoles || [];
   l.shrinkZones = l.shrinkZones || [];
   l.portalPairs = l.portalPairs || [];
+  l.rails = l.rails || [];
   l.preplaced = l.preplaced || [];
   l.goals = l.goals || [];
   l.starScores = l.starScores || [0, 0, 0];
@@ -214,6 +218,7 @@ function bindTools() {
 function setTool(t) {
   tool = t;
   portalPending = null;
+  railStart = null;
   document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
   document.getElementById('tier-wrap').style.display = (t === 'fruit') ? '' : 'none';
   document.getElementById('bh-radius-wrap').style.display = (t === 'blackhole') ? '' : 'none';
@@ -242,7 +247,8 @@ const HINTS = {
   center: 'Click để đặt <b>lõi hấp dẫn</b>. Không đặt lõi nào = dùng tâm mặc định (260,340). Chuột phải để xoá.',
   blackhole: 'Click để đặt <b>hố đen</b> (quả chạm vào biến mất). Chuột phải để xoá.',
   shrink: '<b>Kéo</b> để vẽ <b>vùng co</b> (quả đi qua bị giảm 1 tier). Chuột phải để xoá.',
-  portal: 'Click 2 lần để tạo <b>1 cặp cổng</b> (A rồi B). Chuột phải để xoá cả cặp.',
+  portal: '<b>Kéo lần 1</b> vẽ cổng <b style="color:#ff6b35">A</b>, <b>kéo lần 2</b> vẽ cổng <b style="color:#ff6b35">B</b> → thành 1 cặp. Kéo ngang = portal ngang, kéo dọc = portal dọc. Chuột phải xoá cả cặp.',
+  rail: '<b>Click điểm đầu</b>, rồi <b>click điểm cuối</b> để vẽ <b style="color:#a8edff">thanh deflector</b>. Quả bật vào thanh sẽ đổi hướng. Chuột phải hoặc <kbd>Del</kbd> để xoá.',
   select: '<b>Kéo</b> vật thể để di chuyển vị trí. Chuột phải hoặc <kbd>Del</kbd> để xoá.'
 };
 function updateHint() {
@@ -274,15 +280,24 @@ function findFruitAt(p) {
   return best;
 }
 
+function distToSegment(p, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1) return Math.hypot(p.x - x1, p.y - y1);
+  const t = Math.max(0, Math.min(1, ((p.x - x1) * dx + (p.y - y1) * dy) / lenSq));
+  return Math.hypot(p.x - (x1 + t * dx), p.y - (y1 + t * dy));
+}
+
 // Topmost object under the cursor (returns the live reference so its x/y can be moved).
 // For zones/portal rects, x/y is the top-left corner; dragging shifts the whole rect.
+// Rails are not draggable (they have x1/y1/x2/y2) — select tool skips them.
 function pickObjectAt(p) {
   const f = findFruitAt(p);
   if (f) return f;
   for (const bh of L.blackHoles) if (Math.hypot(p.x - bh.x, p.y - bh.y) <= bh.radius) return bh;
   for (const c of L.centers) if (Math.hypot(p.x - c.x, p.y - c.y) <= 18) return c;
-  for (const pair of L.portalPairs) for (const rc of pair) if (pointInRect(p, rc)) return rc;
-  for (const z of L.shrinkZones) if (pointInRect(p, z)) return z;
+  for (const pair of L.portalPairs) for (const seg of pair) if (distToSegment(p, seg.x1, seg.y1, seg.x2, seg.y2) <= 10) return seg;
+  for (const z of L.shrinkZones) if (distToSegment(p, z.x1, z.y1, z.x2, z.y2) <= 10) return z;
   return null;
 }
 
@@ -297,10 +312,14 @@ function deleteAt(p) {
     if (Math.hypot(p.x - c.x, p.y - c.y) <= 18) { L.centers.splice(L.centers.indexOf(c), 1); return commit(); }
   }
   for (let i = 0; i < L.portalPairs.length; i++) {
-    if (L.portalPairs[i].some(rc => pointInRect(p, rc))) { L.portalPairs.splice(i, 1); return commit(); }
+    if (L.portalPairs[i].some(seg => distToSegment(p, seg.x1, seg.y1, seg.x2, seg.y2) <= 10)) { L.portalPairs.splice(i, 1); return commit(); }
   }
   for (const z of L.shrinkZones) {
-    if (pointInRect(p, z)) { L.shrinkZones.splice(L.shrinkZones.indexOf(z), 1); return commit(); }
+    if (distToSegment(p, z.x1, z.y1, z.x2, z.y2) <= 10) { L.shrinkZones.splice(L.shrinkZones.indexOf(z), 1); return commit(); }
+  }
+  for (let i = 0; i < (L.rails || []).length; i++) {
+    const r = L.rails[i];
+    if (distToSegment(p, r.x1, r.y1, r.x2, r.y2) <= 8) { L.rails.splice(i, 1); return commit(); }
   }
 }
 
@@ -313,11 +332,18 @@ function leftClick(p) {
   }
   if (tool === 'center') { L.centers.push({ x: p.x, y: p.y }); return commit(); }
   if (tool === 'blackhole') { L.blackHoles.push({ x: p.x, y: p.y, radius: bhRadius }); return commit(); }
-  if (tool === 'portal') {
-    const rc = { x: round(p.x - 11), y: round(p.y - 45), width: 22, height: 90 };
-    if (portalPending) { L.portalPairs.push([portalPending, rc]); portalPending = null; }
-    else portalPending = rc;
-    return commit();
+  // portal: handled by drag in bindCanvas
+  if (tool === 'rail') {
+    if (railStart) {
+      L.rails = L.rails || [];
+      L.rails.push({ x1: railStart.x, y1: railStart.y, x2: p.x, y2: p.y });
+      railStart = null;
+      return commit();
+    } else {
+      railStart = { x: p.x, y: p.y };
+      render();
+      return;
+    }
   }
   if (tool === 'select') return deleteAt(p);
 }
@@ -325,42 +351,70 @@ function leftClick(p) {
 function commit() { render(); updateExport(); }
 
 function bindCanvas() {
-  let lastHover = null;
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const p = evtToLogical(e);
     if (e.button === 2) return; // right-click handled by contextmenu
-    if (tool === 'shrink') { isDragging = true; dragStart = p; dragCur = p; return; }
+    if (tool === 'shrink' || tool === 'portal') { isDragging = true; dragStart = p; dragCur = p; return; }
     if (tool === 'select') {
       const obj = pickObjectAt(p);
-      if (obj) { dragObj = obj; dragOffset = { x: p.x - obj.x, y: p.y - obj.y }; }
+      if (obj) {
+        dragObj = obj;
+        if (obj.x1 !== undefined) {
+          // Line segment (shrink zone or portal): track offset from x1/y1 and store original endpoints
+          dragOffset = { x: p.x - obj.x1, y: p.y - obj.y1 };
+          dragSegOrig = { x1: obj.x1, y1: obj.y1, x2: obj.x2, y2: obj.y2 };
+        } else {
+          dragOffset = { x: p.x - obj.x, y: p.y - obj.y };
+          dragSegOrig = null;
+        }
+      }
       return; // select tool only moves/deletes — never places
     }
     leftClick(p);
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (isDragging) { dragCur = evtToLogical(e); render(); }
+    hoverPos = evtToLogical(e);
+    if (isDragging) { dragCur = hoverPos; render(); }
     else if (dragObj) {
-      const p = evtToLogical(e);
-      dragObj.x = round(p.x - dragOffset.x);
-      dragObj.y = round(p.y - dragOffset.y);
+      if (dragSegOrig) {
+        // Moving a line segment: shift both endpoints by the same delta
+        const newX1 = round(hoverPos.x - dragOffset.x);
+        const newY1 = round(hoverPos.y - dragOffset.y);
+        dragObj.x1 = newX1;
+        dragObj.y1 = newY1;
+        dragObj.x2 = round(dragSegOrig.x2 + (newX1 - dragSegOrig.x1));
+        dragObj.y2 = round(dragSegOrig.y2 + (newY1 - dragSegOrig.y1));
+      } else {
+        dragObj.x = round(hoverPos.x - dragOffset.x);
+        dragObj.y = round(hoverPos.y - dragOffset.y);
+      }
       render();
+    } else if (tool === 'rail' && railStart) {
+      render(); // redraw in-progress rail preview on every mouse move
     }
   });
   canvas.addEventListener('pointerup', () => {
-    if (dragObj) { dragObj = null; dragOffset = null; commit(); return; }
+    if (dragObj) { dragObj = null; dragOffset = null; dragSegOrig = null; commit(); return; }
     if (isDragging) {
       isDragging = false;
-      const x = Math.min(dragStart.x, dragCur.x), y = Math.min(dragStart.y, dragCur.y);
-      const w = Math.abs(dragCur.x - dragStart.x), h = Math.abs(dragCur.y - dragStart.y);
-      if (w > 8 && h > 8) { L.shrinkZones.push({ x: round(x), y: round(y), width: round(w), height: round(h) }); commit(); }
+      const seg = { x1: dragStart.x, y1: dragStart.y, x2: dragCur.x, y2: dragCur.y };
+      const len = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1);
+      if (tool === 'shrink' && len > 8) {
+        L.shrinkZones.push(seg); commit();
+      }
+      if (tool === 'portal' && len > 8) {
+        if (portalPending) { L.portalPairs.push([portalPending, seg]); portalPending = null; }
+        else portalPending = seg;
+        commit();
+      }
       dragStart = dragCur = null;
     }
   });
   canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); deleteAt(evtToLogical(e)); });
-  canvas.addEventListener('pointermove', (e) => { lastHover = evtToLogical(e); });
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Delete' && lastHover) deleteAt(lastHover);
+    if (e.key === 'Delete' && hoverPos) deleteAt(hoverPos);
+    if (e.key === 'Escape') { railStart = null; portalPending = null; render(); }
   });
 }
 
@@ -387,29 +441,71 @@ function render() {
 
   // shrink zones
   L.shrinkZones.forEach(z => {
-    ctx.fillStyle = 'rgba(0,200,255,0.13)';
-    ctx.fillRect(z.x, z.y, z.width, z.height);
-    ctx.strokeStyle = 'rgba(0,220,255,0.8)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
-    ctx.strokeRect(z.x, z.y, z.width, z.height); ctx.setLineDash([]);
-    label(ctx, '▼ SHRINK', z.x + z.width / 2, z.y + z.height / 2, '#7fe6ff');
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,220,255,0.8)'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.setLineDash([10, 6]);
+    ctx.beginPath(); ctx.moveTo(z.x1, z.y1); ctx.lineTo(z.x2, z.y2); ctx.stroke();
+    ctx.setLineDash([]);
+    // Endpoint dots
+    for (const [ex, ey] of [[z.x1, z.y1], [z.x2, z.y2]]) {
+      ctx.fillStyle = 'rgba(0,220,255,0.8)';
+      ctx.beginPath(); ctx.arc(ex, ey, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    label(ctx, '▼ SHRINK', (z.x1 + z.x2) / 2, (z.y1 + z.y2) / 2 - 12, '#7fe6ff');
+    ctx.restore();
   });
 
   // portals
   const PC = ['#ff6b35', '#a855f7', '#22c55e'];
+  const drawEditorPortal = (seg, lbl, col) => {
+    ctx.save();
+    ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke();
+    ctx.setLineDash([]);
+    for (const [ex, ey] of [[seg.x1, seg.y1], [seg.x2, seg.y2]]) {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(ex, ey, 4.5, 0, Math.PI * 2); ctx.fill();
+    }
+    const cx = (seg.x1 + seg.x2) / 2, cy = (seg.y1 + seg.y2) / 2;
+    const len = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1);
+    const perpX = len > 0 ? -(seg.y2 - seg.y1) / len * 14 : 0;
+    const perpY = len > 0 ? (seg.x2 - seg.x1) / len * 14 : -14;
+    label(ctx, lbl, cx + perpX, cy + perpY, col, 12);
+    ctx.restore();
+  };
   L.portalPairs.forEach((pair, pi) => {
     const col = PC[pi % PC.length];
-    pair.forEach((rc, si) => {
-      ctx.fillStyle = col + '30'; ctx.fillRect(rc.x, rc.y, rc.width, rc.height);
-      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
-      ctx.strokeRect(rc.x, rc.y, rc.width, rc.height); ctx.setLineDash([]);
-      label(ctx, si === 0 ? 'A' : 'B', rc.x + rc.width / 2, rc.y + rc.height / 2, col);
-    });
+    pair.forEach((seg, si) => drawEditorPortal(seg, si === 0 ? 'A' : 'B', col));
   });
   if (portalPending) {
-    const rc = portalPending;
-    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.setLineDash([3, 3]);
-    ctx.strokeRect(rc.x, rc.y, rc.width, rc.height); ctx.setLineDash([]);
-    label(ctx, 'A?', rc.x + rc.width / 2, rc.y + rc.height / 2, '#ffd700');
+    drawEditorPortal(portalPending, 'A (chờ B)', '#ffd700');
+  }
+
+  // rails
+  (L.rails || []).forEach(r => {
+    ctx.save();
+    ctx.shadowColor = '#a8edff'; ctx.shadowBlur = 6;
+    ctx.strokeStyle = '#a8edff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(r.x1, r.y1); ctx.lineTo(r.x2, r.y2); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#a8edff';
+    for (const [ex, ey] of [[r.x1, r.y1], [r.x2, r.y2]]) {
+      ctx.beginPath(); ctx.arc(ex, ey, 4.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // Midpoint label
+    label(ctx, '↔', (r.x1 + r.x2) / 2, (r.y1 + r.y2) / 2 - 10, '#a8edff', 10);
+    ctx.restore();
+  });
+  // in-progress rail (railStart → hover)
+  if (railStart && hoverPos) {
+    ctx.save();
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.moveTo(railStart.x, railStart.y); ctx.lineTo(hoverPos.x, hoverPos.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath(); ctx.arc(railStart.x, railStart.y, 5, 0, Math.PI * 2); ctx.fill();
+    const dist = Math.round(Math.hypot(hoverPos.x - railStart.x, hoverPos.y - railStart.y));
+    label(ctx, `${dist}px — click để chốt B`, (railStart.x + hoverPos.x) / 2, (railStart.y + hoverPos.y) / 2 - 10, '#ffd700', 10);
+    ctx.restore();
   }
 
   // black holes
@@ -438,12 +534,21 @@ function render() {
     label(ctx, 'T' + f.tier, f.x, f.y, 'rgba(0,0,0,0.55)', 10);
   });
 
-  // shrink-zone drag preview
+  // drag preview (shrink or portal)
   if (isDragging && dragStart && dragCur) {
-    const x = Math.min(dragStart.x, dragCur.x), y = Math.min(dragStart.y, dragCur.y);
-    const w = Math.abs(dragCur.x - dragStart.x), h = Math.abs(dragCur.y - dragStart.y);
-    ctx.strokeStyle = '#7fe6ff'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
-    ctx.strokeRect(x, y, w, h); ctx.setLineDash([]);
+    if (tool === 'portal') {
+      ctx.strokeStyle = '#ff6b35'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(dragStart.x, dragStart.y); ctx.lineTo(dragCur.x, dragCur.y); ctx.stroke();
+      ctx.setLineDash([]);
+      const dist = Math.round(Math.hypot(dragCur.x - dragStart.x, dragCur.y - dragStart.y));
+      label(ctx, `${portalPending ? 'B?' : 'A?'} ${dist}px`, (dragStart.x + dragCur.x) / 2, (dragStart.y + dragCur.y) / 2 - 10, '#ff6b35', 12);
+    } else {
+      ctx.strokeStyle = '#7fe6ff'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(dragStart.x, dragStart.y); ctx.lineTo(dragCur.x, dragCur.y); ctx.stroke();
+      ctx.setLineDash([]);
+      const dist = Math.round(Math.hypot(dragCur.x - dragStart.x, dragCur.y - dragStart.y));
+      label(ctx, `${dist}px`, (dragStart.x + dragCur.x) / 2, (dragStart.y + dragCur.y) / 2 - 10, '#7fe6ff', 10);
+    }
   }
 
   updateHint();
@@ -469,7 +574,7 @@ function objArray(items, keys) {
 }
 function portalArray(pairs) {
   const rows = pairs.map(pair => {
-    const rs = pair.map(p => `{ x: ${n(p.x)}, y: ${n(p.y)}, width: ${n(p.width)}, height: ${n(p.height)} }`);
+    const rs = pair.map(p => `{ x1: ${n(p.x1)}, y1: ${n(p.y1)}, x2: ${n(p.x2)}, y2: ${n(p.y2)} }`);
     return `${PI}  [\n${PI}    ${rs[0]},\n${PI}    ${rs[1]}\n${PI}  ]`;
   });
   return `[\n${rows.join(',\n')}\n${PI}]`;
@@ -487,8 +592,9 @@ function serializeLevel(l) {
   lines.push(`${PI}starScores: [${l.starScores.map(n).join(', ')}],`);
   if (l.centers && l.centers.length) lines.push(`${PI}centers: ${objArray(l.centers, ['x', 'y'])},`);
   if (l.blackHoles && l.blackHoles.length) lines.push(`${PI}blackHoles: ${objArray(l.blackHoles, ['x', 'y', 'radius'])},`);
-  if (l.shrinkZones && l.shrinkZones.length) lines.push(`${PI}shrinkZones: ${objArray(l.shrinkZones, ['x', 'y', 'width', 'height'])},`);
+  if (l.shrinkZones && l.shrinkZones.length) lines.push(`${PI}shrinkZones: ${objArray(l.shrinkZones, ['x1', 'y1', 'x2', 'y2'])},`);
   if (l.portalPairs && l.portalPairs.length) lines.push(`${PI}portalPairs: ${portalArray(l.portalPairs)},`);
+  if (l.rails && l.rails.length) lines.push(`${PI}rails: ${objArray(l.rails, ['x1', 'y1', 'x2', 'y2'])},`);
   if (l.preplaced && l.preplaced.length) lines.push(`${PI}preplaced: ${objArray(l.preplaced, ['tier', 'x', 'y'])},`);
   lines.push(`${PI}goals: [`);
   l.goals.forEach((g, i) => {
@@ -507,7 +613,7 @@ function serializeLevelsArray(arr) {
 // Working level → clean output object (drop empty optional arrays, reset goal progress)
 function cleanLevel(l) {
   const c = clone(l);
-  ['centers', 'blackHoles', 'shrinkZones', 'portalPairs', 'preplaced'].forEach(k => {
+  ['centers', 'blackHoles', 'shrinkZones', 'portalPairs', 'rails', 'preplaced'].forEach(k => {
     if (!c[k] || !c[k].length) delete c[k];
   });
   c.goals = (c.goals || []).map(g => g.type === 'fruit'
@@ -541,7 +647,7 @@ function bindActions() {
     renderGoals(); updateExport();
   };
   document.getElementById('clear-field-btn').onclick = () => {
-    L.centers = []; L.blackHoles = []; L.shrinkZones = []; L.portalPairs = []; L.preplaced = [];
+    L.centers = []; L.blackHoles = []; L.shrinkZones = []; L.portalPairs = []; L.rails = []; L.preplaced = [];
     portalPending = null; commit();
     setStatus('Đã xoá hết vật thể trên sân.');
   };
