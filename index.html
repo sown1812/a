@@ -61,23 +61,32 @@
       <div id="booster-hint" class="booster-hint hidden">
         <span id="booster-hint-text">Tap a fruit</span>
       </div>
+
+      <!-- Manual mode rotation pads (hidden unless manual control is active) -->
+      <div id="manual-controls" class="manual-controls hidden">
+        <button id="manual-left-btn" class="manual-rotate-btn" aria-label="Xoay trái">◀</button>
+        <button id="manual-right-btn" class="manual-rotate-btn" aria-label="Xoay phải">▶</button>
+      </div>
     </div>
 
     <!-- In-game Booster Bar (below canvas, horizontal row) -->
     <div id="booster-bar" class="booster-bar hidden">
-      <button class="booster-btn" data-booster="vacuum" title="Hút 1 quả ra ngoài, giữ trong slot HELD">
+      <div class="booster-coins" title="Số coin hiện có — chạm booster đã hết để mua thêm">
+        <span class="bc-icon">🪙</span><span id="booster-coins-val">0</span>
+      </div>
+      <button class="booster-btn" data-booster="vacuum" title="Hút 1 quả ra ngoài, giữ trong slot HELD. Hết thì chạm để mua 300 🪙">
         <span class="booster-icon">🌀</span>
         <span class="booster-count" id="booster-count-vacuum">0</span>
       </button>
-      <button class="booster-btn" data-booster="grow" title="Tăng size 1 quả lên">
+      <button class="booster-btn" data-booster="grow" title="Tăng size 1 quả lên. Hết thì chạm để mua 300 🪙">
         <span class="booster-icon">🔼</span>
         <span class="booster-count" id="booster-count-grow">0</span>
       </button>
-      <button class="booster-btn" data-booster="slow" title="Làm chậm vòng quay">
+      <button class="booster-btn" data-booster="slow" title="Làm chậm vòng quay. Hết thì chạm để mua 300 🪙">
         <span class="booster-icon">🐢</span>
         <span class="booster-count" id="booster-count-slow">0</span>
       </button>
-      <button class="booster-btn" data-booster="shuffle" title="Xáo trộn các quả">
+      <button class="booster-btn" data-booster="shuffle" title="Xáo trộn các quả. Hết thì chạm để mua 600 🪙">
         <span class="booster-icon">🔀</span>
         <span class="booster-count" id="booster-count-shuffle">0</span>
       </button>
@@ -158,15 +167,19 @@
               <button id="mode-fruit-btn" class="mode-btn">🍎 Hoa Quả</button>
               <button id="mode-custom-btn" class="mode-btn">👥 Tùy Chỉnh</button>
             </div>
+            <div class="mode-toggle">
+              <button id="control-auto-btn" class="mode-btn">🔄 Tự Xoay</button>
+              <button id="control-manual-btn" class="mode-btn">🎯 Thủ Công</button>
+            </div>
             <button id="start-btn" class="btn btn-primary btn-pulse btn-play-large">PLAY NOW</button>
             <button id="level-select-btn" class="btn btn-secondary">SELECT LEVEL</button>
             <button id="tutorial-btn" class="btn btn-secondary" style="opacity:0.8;font-size:0.85em;">🎓 HƯỚNG DẪN</button>
             
             <div class="instructions">
               <h3>How to Play:</h3>
-              <p>🍓 Launchable fruits rotate around the planet center.</p>
-              <p>👉 <strong>Tap screen</strong> to shoot fruit into the core.</p>
-              <p>🍓 Merge 2 identical fruits to evolve them.</p>
+              <p>🔄 <strong>Tự Xoay:</strong> vòng phóng tự quay — tap để bắn vào lõi.</p>
+              <p>🎯 <strong>Thủ Công:</strong> dùng ◀ ▶ (hoặc phím ←/→, A/D) để xoay, tap/Space để bắn.</p>
+              <p>🍓 Ghép 2 quả giống nhau để tiến hóa.</p>
             </div>
           </div>
         </div>

@@ -29,6 +29,7 @@ class LevelManager {
     }
 
     // Config các thông số màn chơi chỉnh tay trực tiếp tại đây!
+    // <<LEVEL_EDITOR:START>> — Level Editor (editor.html) tự ghi đè vùng này. Đừng sửa/xoá 2 dòng marker START/END.
     this.levels = [
       {
         id: 1,
@@ -220,8 +221,39 @@ class LevelManager {
           { type: 'fruit', target: 8, count: 1, current: 0 },
           { type: 'fruit', target: 5, count: 2, current: 0 }
         ]
+      },
+      {
+        id: 11,
+        name: "Infinity Orbit",
+        description: "Bệ phóng đi theo quỹ đạo số 8 — 2 tâm hút ở hai thùy trên/dưới. Bắn gần thùy nào, quả rơi vào well đó.",
+        maxSpawnTier: 3,
+        // Figure-8 (lemniscate) launcher path instead of a circle
+        orbitPath: 'figure8',
+        orbitA: 180,   // bề ngang mỗi thùy của số 8
+        orbitB: 250,   // chiều cao từ thùy trên xuống thùy dưới
+        orbitRadius: 248, // fallback nếu cần
+        warningLimit: 85,
+        launcherSpeed: 0.9,
+        maxSpawns: 45,
+        aimNearest: true, // mỗi phát bắn nhắm vào tâm hút gần nhất
+        // Hai tâm hút đặt ở giữa hai thùy của số 8 (trên & dưới)
+        centers: [
+          { x: 260, y: 190 },
+          { x: 260, y: 490 }
+        ],
+        preplaced: [
+          // Thùy trên
+          { tier: 0, x: 248, y: 178 }, { tier: 0, x: 272, y: 178 }, { tier: 1, x: 260, y: 204 },
+          // Thùy dưới
+          { tier: 1, x: 248, y: 478 }, { tier: 1, x: 272, y: 478 }, { tier: 0, x: 260, y: 504 }
+        ],
+        starScores: [700, 1400, 2300],
+        goals: [
+          { type: 'fruit', target: 3, count: 2, current: 0 }
+        ]
       }
     ];
+    // <<LEVEL_EDITOR:END>>
 
     // Unlock every level for the player
     this.unlockedLevelIndex = this.levels.length - 1;

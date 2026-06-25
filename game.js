@@ -46,6 +46,12 @@ class Game {
     this.launcherAngle = 0;
     this.launcherSpeed = 0.95;
 
+    // Control mode: 'auto' = launcher auto-orbits around the core (classic),
+    // 'manual' = player aims by hovering/dragging and releases to shoot.
+    this.controlMode = localStorage.getItem('planet_merge_control_mode') || 'auto';
+    this._manualRotateDir = 0;     // -1 = rotate left, +1 = rotate right, 0 = idle (manual mode)
+    this.manualRotateSpeed = 1.9;  // rotation responsiveness while a direction is held
+
     this.currentFruitTier = 0;
     this.nextFruitTier = 0;
     this.launchCooldown = false;
@@ -80,6 +86,13 @@ class Game {
       grow:    parseInt(localStorage.getItem('planet_merge_ib_grow')    || '3', 10),
       slow:    parseInt(localStorage.getItem('planet_merge_ib_slow')    || '3', 10),
       shuffle: parseInt(localStorage.getItem('planet_merge_ib_shuffle') || '3', 10)
+    };
+    // Coin price to buy 1 more of a booster mid-level when depleted (booster 4 = shuffle is pricier)
+    this.boosterPrices = {
+      vacuum:  300,
+      grow:    300,
+      slow:    300,
+      shuffle: 600
     };
     this.activeBooster = null; // type currently waiting for a fruit tap (vacuum/grow)
     this.slowTimer = 0;        // ms remaining of the slow-orbit effect
@@ -149,6 +162,27 @@ class Game {
       GAME_MODE = 'custom';
       localStorage.setItem('planet_merge_game_mode', 'custom');
       _updateModeButtons();
+    });
+
+    // Control mode toggle: auto-orbit vs manual aim
+    const _updateControlButtons = () => {
+      const aBtn = document.getElementById('control-auto-btn');
+      const mBtn = document.getElementById('control-manual-btn');
+      if (aBtn) aBtn.classList.toggle('active', this.controlMode === 'auto');
+      if (mBtn) mBtn.classList.toggle('active', this.controlMode === 'manual');
+    };
+    _updateControlButtons();
+    document.getElementById('control-auto-btn')?.addEventListener('click', () => {
+      this.audio.playClick();
+      this.controlMode = 'auto';
+      localStorage.setItem('planet_merge_control_mode', 'auto');
+      _updateControlButtons();
+    });
+    document.getElementById('control-manual-btn')?.addEventListener('click', () => {
+      this.audio.playClick();
+      this.controlMode = 'manual';
+      localStorage.setItem('planet_merge_control_mode', 'manual');
+      _updateControlButtons();
     });
 
     document.getElementById('level-back-btn').addEventListener('click', () => {
@@ -257,14 +291,49 @@ class Game {
         return;
       }
 
+      // Both modes: tapping the play area fires (manual aims via the ◀ ▶ pads / arrow keys)
       this.launchFruit();
     });
 
+    // Manual mode: hold the on-screen ◀ / ▶ pads to rotate the launcher
+    const _bindRotatePad = (id, dir) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      const press = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this._manualRotateDir = dir;
+        btn.classList.add('pressed');
+      };
+      const release = (e) => {
+        if (e) e.stopPropagation();
+        if (this._manualRotateDir === dir) this._manualRotateDir = 0;
+        btn.classList.remove('pressed');
+      };
+      btn.addEventListener('pointerdown', press);
+      btn.addEventListener('pointerup', release);
+      btn.addEventListener('pointerleave', release);
+      btn.addEventListener('pointercancel', release);
+    };
+    _bindRotatePad('manual-left-btn', -1);
+    _bindRotatePad('manual-right-btn', 1);
+
+    // Keyboard: Space shoots; ←/→ or A/D rotate the launcher in manual mode
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' && this.state === 'playing') {
+      if (this.state !== 'playing') return;
+      if (e.code === 'Space') {
         e.preventDefault();
         this.launchFruit();
+        return;
       }
+      if (this.isManual()) {
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') { e.preventDefault(); this._manualRotateDir = -1; }
+        else if (e.code === 'ArrowRight' || e.code === 'KeyD') { e.preventDefault(); this._manualRotateDir = 1; }
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if ((e.code === 'ArrowLeft' || e.code === 'KeyA') && this._manualRotateDir === -1) this._manualRotateDir = 0;
+      else if ((e.code === 'ArrowRight' || e.code === 'KeyD') && this._manualRotateDir === 1) this._manualRotateDir = 0;
     });
   }
 
@@ -324,8 +393,8 @@ class Game {
     const lvlNameEl = document.getElementById('menu-current-level-name');
     const lvlDescEl = document.getElementById('menu-current-level-desc');
 
-    if (lvlNameEl) lvlNameEl.textContent = `Level ${currentLevel.id}: ${currentLevel.name}`;
-    if (lvlDescEl) lvlDescEl.textContent = currentLevel.description;
+    if (lvlNameEl) lvlNameEl.textContent = currentLevel.name ? `Level ${currentLevel.id}: ${currentLevel.name}` : `Level ${currentLevel.id}`;
+    if (lvlDescEl) lvlDescEl.textContent = currentLevel.description || '';
 
     if (this.shop) {
       this.shop.updateGiftButton();
@@ -541,6 +610,13 @@ class Game {
     this.launcherSpeed = lvl.launcherSpeed || (0.95 + idx * 0.12);
     this.physics.warningLimit = this.warningLimit;
 
+    // Launcher orbit shape: 'circle' (default) or 'figure8' (lemniscate). aimNearest sends each
+    // shot toward the closest gravity well instead of the canvas centre.
+    this.orbitPath = lvl.orbitPath || 'circle';
+    this.orbitA = lvl.orbitA || this.orbitRadius; // figure-8 horizontal half-width
+    this.orbitB = lvl.orbitB || this.orbitRadius; // figure-8 vertical half-height
+    this.aimNearest = !!lvl.aimNearest;
+
     // Multi-center support: a level may define several gravity wells; otherwise use the single canvas center
     if (lvl.centers && lvl.centers.length) {
       this.physics.centers = lvl.centers.map(c => ({ x: c.x, y: c.y }));
@@ -737,15 +813,17 @@ class Game {
     if (this.vacuumHeldFruitTier === null || this.launchCooldown) return;
     this.launchCooldown = true;
 
-    const lx = this.cx + Math.cos(this.launcherAngle) * this.orbitRadius;
-    const ly = this.cy + Math.sin(this.launcherAngle) * this.orbitRadius;
+    const pos = this.getLauncherPos(this.launcherAngle);
+    const lx = pos.x;
+    const ly = pos.y;
 
     const body = this.physics.addBody(lx, ly, this.vacuumHeldFruitTier);
     body.deformVelX = -0.15;
     body.deformVelY = 0.15;
 
-    const dx = this.cx - lx;
-    const dy = this.cy - ly;
+    const aim = this.getAimTarget(lx, ly);
+    const dx = aim.x - lx;
+    const dy = aim.y - ly;
     const dist = Math.sqrt(dx * dx + dy * dy);
     const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
     const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
@@ -765,6 +843,40 @@ class Game {
     setTimeout(() => { this.launchCooldown = false; }, this.cooldownTime);
   }
 
+  // Manual control is active only outside the scripted tutorial (level 1 keeps the guided auto-orbit)
+  isManual() {
+    return this.controlMode === 'manual' && !this.tutorialMode;
+  }
+
+  // Show the ◀ ▶ rotation pads only while actively playing in manual mode
+  updateManualControls() {
+    const pad = document.getElementById('manual-controls');
+    if (pad) pad.classList.toggle('hidden', !(this.state === 'playing' && this.isManual()));
+  }
+
+  // Launcher position for a given orbit angle — circle by default, figure-8 (Gerono lemniscate) when set.
+  // Figure-8 is vertical: two lobes stacked top/bottom, crossing at the canvas centre.
+  getLauncherPos(angle) {
+    if (this.orbitPath === 'figure8') {
+      return {
+        x: this.cx - this.orbitA * Math.sin(angle) * Math.cos(angle),
+        y: this.cy + this.orbitB * Math.cos(angle)
+      };
+    }
+    return {
+      x: this.cx + Math.cos(angle) * this.orbitRadius,
+      y: this.cy + Math.sin(angle) * this.orbitRadius
+    };
+  }
+
+  // Where a launched fruit is aimed: the nearest well (multi-well + aimNearest) or the canvas centre.
+  getAimTarget(lx, ly) {
+    if (this.aimNearest && this.physics.centers.length > 1) {
+      return this.physics.getNearestCenter(lx, ly);
+    }
+    return { x: this.cx, y: this.cy };
+  }
+
   launchFruit() {
     if (this.launchCooldown || this.levelManager.remainingSpawns <= 0) return;
     this.launchCooldown = true;
@@ -773,8 +885,9 @@ class Game {
       this.tutorialStep = 1;
     }
 
-    const lx = this.cx + Math.cos(this.launcherAngle) * this.orbitRadius;
-    const ly = this.cy + Math.sin(this.launcherAngle) * this.orbitRadius;
+    const pos = this.getLauncherPos(this.launcherAngle);
+    const lx = pos.x;
+    const ly = pos.y;
 
     const body = this.physics.addBody(lx, ly, this.currentFruitTier);
     body.deformVelX = -0.15;
@@ -784,8 +897,9 @@ class Game {
       body.isFirstFruit = true;
     }
 
-    const dx = this.cx - lx;
-    const dy = this.cy - ly;
+    const aim = this.getAimTarget(lx, ly);
+    const dx = aim.x - lx;
+    const dy = aim.y - ly;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     // Tốc độ phóng ban đầu rất chậm để nhìn rõ hoạt ảnh tăng tốc khi rơi vào tâm
@@ -833,15 +947,28 @@ class Game {
 
   refreshBoosterUI() {
     Object.keys(this.boosterDefs).forEach(type => {
+      const count = this.boosters[type];
+      const depleted = count <= 0;
+      const price = this.boosterPrices[type];
+
       const countEl = document.getElementById(`booster-count-${type}`);
-      if (countEl) countEl.textContent = this.boosters[type];
+      if (countEl) {
+        // When depleted, the badge becomes a coin price tag the player can tap to buy
+        countEl.textContent = depleted ? `🪙${price}` : count;
+        countEl.classList.toggle('price', depleted);
+      }
 
       const btn = document.querySelector(`.booster-btn[data-booster="${type}"]`);
       if (btn) {
-        btn.classList.toggle('depleted', this.boosters[type] <= 0);
+        btn.classList.toggle('depleted', depleted);
+        btn.classList.toggle('buyable', depleted && this.coins >= price);
         btn.classList.toggle('active', this.activeBooster === type);
       }
     });
+
+    // Live coin balance shown in the booster bar so the player can decide to buy mid-level
+    const coinsVal = document.getElementById('booster-coins-val');
+    if (coinsVal) coinsVal.textContent = this.coins;
 
     const hint = document.getElementById('booster-hint');
     const hintText = document.getElementById('booster-hint-text');
@@ -863,6 +990,8 @@ class Game {
       const hint = document.getElementById('booster-hint');
       if (hint) hint.classList.add('hidden');
     }
+    this._manualRotateDir = 0;
+    this.updateManualControls();
     this.refreshBoosterUI();
   }
 
@@ -870,13 +999,8 @@ class Game {
     if (this.state !== 'playing' || !this.boosterDefs[type]) return;
 
     if (this.boosters[type] <= 0) {
-      // Out of this booster — flash the depleted button, do nothing else
-      const btn = document.querySelector(`.booster-btn[data-booster="${type}"]`);
-      if (btn) {
-        btn.classList.remove('shake');
-        void btn.offsetWidth; // restart animation
-        btn.classList.add('shake');
-      }
+      // Out of this booster — offer to buy one more with coins
+      this.buyBooster(type);
       return;
     }
 
@@ -898,6 +1022,44 @@ class Game {
     this.boosters[type] = Math.max(0, this.boosters[type] - 1);
     localStorage.setItem(`planet_merge_ib_${type}`, this.boosters[type]);
     this.refreshBoosterUI();
+  }
+
+  // Buy 1 more of a depleted booster with coins, then immediately use it (one-tap top-up)
+  buyBooster(type) {
+    const price = this.boosterPrices[type];
+    const def = this.boosterDefs[type];
+    const flashDeny = () => {
+      const btn = document.querySelector(`.booster-btn[data-booster="${type}"]`);
+      if (btn) { btn.classList.remove('shake'); void btn.offsetWidth; btn.classList.add('shake'); }
+    };
+
+    if (this.coins < price) {
+      flashDeny();
+      this.floatingTexts.push({
+        x: this.cx, y: this.cy - 40, text: 'Không đủ 🪙!',
+        color: '#ff5e97', life: 1.3, scale: 0.08, vy: -2.0, rot: 0
+      });
+      if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+      return;
+    }
+
+    if (!confirm(`Hết ${def.icon} rồi! Mua thêm 1 với ${price} 🪙?\n(Bạn đang có ${this.coins} 🪙)`)) return;
+
+    this.coins -= price;
+    this.boosters[type] += 1;
+    localStorage.setItem('planet_merge_coins', this.coins);
+    localStorage.setItem(`planet_merge_ib_${type}`, this.boosters[type]);
+    this.audio.playClick();
+    this.particles.spawnConfetti(this.cx, this.width);
+    this.floatingTexts.push({
+      x: this.cx, y: this.cy - 40, text: `${def.icon} +1`,
+      color: '#ffd56b', life: 1.3, scale: 0.08, vy: -2.0, rot: 0
+    });
+    this.updateResourceHeader();
+    this.refreshBoosterUI();
+
+    // One-tap top-up: now that the player owns one, use it straight away
+    this.useBooster(type);
   }
 
   // Find the settled fruit whose body contains the tapped point (nearest wins)
@@ -1311,10 +1473,14 @@ class Game {
           if (this.slowTimer <= 0) this.slowTimer = 0;
         }
 
-        this.launcherAngle += currentSpeed * 0.016 * dt;
-        if (this.launcherAngle >= Math.PI * 2) {
-          this.launcherAngle -= Math.PI * 2;
+        if (this.isManual()) {
+          // Manual: player rotates the launcher with the ◀ ▶ pads or ←/→ (A/D) keys
+          this.launcherAngle += this._manualRotateDir * this.manualRotateSpeed * 0.016 * dt;
+        } else {
+          this.launcherAngle += currentSpeed * 0.016 * dt;
         }
+        if (this.launcherAngle >= Math.PI * 2) this.launcherAngle -= Math.PI * 2;
+        if (this.launcherAngle < 0) this.launcherAngle += Math.PI * 2;
       }
 
       // Vẫn cập nhật vật lý khi thắng để quả tiếp tục rơi/phồng to/nẩy
@@ -1460,6 +1626,20 @@ class Game {
 
   drawOrbitGuidelines(ctx) {
     ctx.save();
+
+    // Figure-8 levels: trace the lemniscate path the launcher travels along
+    if (this.orbitPath === 'figure8') {
+      ctx.strokeStyle = 'rgba(155, 81, 224, 0.22)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      const steps = 140;
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * Math.PI * 2;
+        const p = this.getLauncherPos(t);
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    }
 
     // Warning boundary line (dashed pink ring) — one per gravity well
     if (this.isOverflowing) {
@@ -1668,18 +1848,27 @@ class Game {
   drawLauncher(ctx) {
     ctx.save();
 
-    const lx = this.cx + Math.cos(this.launcherAngle) * this.orbitRadius;
-    const ly = this.cy + Math.sin(this.launcherAngle) * this.orbitRadius;
+    const pos = this.getLauncherPos(this.launcherAngle);
+    const lx = pos.x;
+    const ly = pos.y;
 
     const config = FRUIT_CONFIGS[this.currentFruitTier];
     const laserColor = config.color;
     const time = Date.now();
     const pulseWidth = Math.sin(time / 120) * 1.5;
 
-    // Single-center: laser stops at the safe-zone edge. Multi-center: aim at the shared centroid.
-    const guideLen = (this.physics.centers.length > 1) ? this.orbitRadius : this.warningLimit;
-    const guideEndX = this.cx + Math.cos(this.launcherAngle) * guideLen;
-    const guideEndY = this.cy + Math.sin(this.launcherAngle) * guideLen;
+    // Laser guide endpoint. Figure-8 / aimNearest: point straight at the well the shot will fall into.
+    // Otherwise keep the classic radial beam (centroid for multi-well, safe-edge for single).
+    let guideEndX, guideEndY;
+    if (this.orbitPath === 'figure8' || this.aimNearest) {
+      const aim = this.getAimTarget(lx, ly);
+      guideEndX = aim.x;
+      guideEndY = aim.y;
+    } else {
+      const guideLen = (this.physics.centers.length > 1) ? this.orbitRadius : this.warningLimit;
+      guideEndX = this.cx + Math.cos(this.launcherAngle) * guideLen;
+      guideEndY = this.cy + Math.sin(this.launcherAngle) * guideLen;
+    }
 
     // Layer 1: Thick Outer Laser Glow
     ctx.strokeStyle = laserColor;
@@ -1996,7 +2185,30 @@ class Game {
 
 // 7. Initialize Game
 function initializeGame() {
+  if (window.__gameInited) return; // guard against double init (DOMContentLoaded + load)
+  window.__gameInited = true;
   window.game = new Game();
+
+  // Level Editor playtest hook: when opened as index.html?test=1, load the draft
+  // level injected by editor.html (localStorage) and jump straight into it.
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('test') === '1') {
+      const draft = JSON.parse(localStorage.getItem('planet_merge_test_level') || 'null');
+      if (draft && draft.goals) {
+        draft.goals.forEach(g => g.current = 0);
+        const lm = window.game.levelManager;
+        lm.levels.push(draft);
+        const idx = lm.levels.length - 1;
+        lm.unlockedLevelIndex = idx;
+        window.game.lives = window.game.maxHearts; // never block a playtest on hearts
+        window.game.startLevel(idx);
+      }
+    }
+  } catch (e) {
+    console.warn('[editor] playtest level load failed:', e);
+  }
+
   requestAnimationFrame((t) => window.game.update(t));
 }
 

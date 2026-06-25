@@ -372,17 +372,23 @@ class PhysicsEngine {
     // ── End Shrink Zone Check ──────────────────────────────────────────────
 
     // ── Portal Check ───────────────────────────────────────────────────────
-    // Khi fruit center đi vào 1 trong 2 portal của cặp → teleport sang portal kia,
-    // redirect velocity về gravity core (giữ tốc độ). portalCooldown ngăn ping-pong.
+    // Khi THÂN quả chạm 1 trong 2 portal của cặp (không cần tâm đi qua chính giữa) →
+    // teleport sang portal kia, redirect velocity về gravity core (giữ tốc độ).
+    // Dùng kiểm tra giao nhau hình tròn–chữ nhật: lấy điểm gần nhất trên cổng tới
+    // tâm quả, nếu khoảng cách ≤ bán kính quả thì coi là đã chạm. portalCooldown ngăn ping-pong.
     if (this.portalPairs && this.portalPairs.length > 0) {
       for (const b of this.bodies) {
         if (b.portalCooldown > 0) { b.portalCooldown -= dt; continue; }
+        const er = b.r * Math.min(1, b.scale || 1); // bán kính hiệu dụng (tính cả scale lúc sinh)
         for (const pair of this.portalPairs) {
           for (let pi = 0; pi < 2; pi++) {
             const entry = pair[pi];
             const exit  = pair[1 - pi];
-            if (b.x >= entry.x && b.x <= entry.x + entry.width &&
-                b.y >= entry.y && b.y <= entry.y + entry.height) {
+            // Điểm trên hình chữ nhật cổng gần tâm quả nhất
+            const nx = Math.max(entry.x, Math.min(b.x, entry.x + entry.width));
+            const ny = Math.max(entry.y, Math.min(b.y, entry.y + entry.height));
+            const gdx = b.x - nx, gdy = b.y - ny;
+            if (gdx * gdx + gdy * gdy <= er * er) {
               // Tính tốc độ hiện tại (Verlet: v = pos - prevPos)
               const vx = b.x - b.px;
               const vy = b.y - b.py;
@@ -526,7 +532,7 @@ class PhysicsEngine {
           // Merge zone: slightly larger than collision radius so fruits feel responsive
           // even when visually just touching (not overlapping in physics)
           if (step === iterations - 1) {
-            const MERGE_TOLERANCE = 5;
+            const MERGE_TOLERANCE = 2;
             const mergeDist = r1 + r2 + MERGE_TOLERANCE;
             if (distSq < mergeDist * mergeDist) {
               if (b1.tier === b2.tier && !b1.merged && !b2.merged &&

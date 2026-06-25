@@ -320,6 +320,43 @@ body {
   cursor: default;
 }
 
+/* Depleted but affordable: tappable to buy with coins — keep it lively + gold ring */
+.booster-btn.depleted.buyable {
+  opacity: 0.92;
+  filter: grayscale(0.1);
+  cursor: pointer;
+  border-color: #ffd56b;
+  box-shadow: 0 0 0 2px rgba(255, 213, 107, 0.45), 0 6px 18px rgba(255, 184, 0, 0.3);
+}
+
+/* Price tag badge shown on depleted boosters (replaces the count) */
+.booster-btn .booster-count.price {
+  background: linear-gradient(135deg, #ffb800 0%, #ff8a00 100%);
+  box-shadow: 0 2px 6px rgba(255, 138, 0, 0.5);
+  font-size: 10px;
+  padding: 0 4px;
+  right: -6px;
+}
+
+/* Live coin balance at the start of the booster bar */
+.booster-coins {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 11px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 2px solid var(--border-glass);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 18px rgba(115, 95, 157, 0.18);
+  font-family: var(--font-family-title);
+  font-weight: 700;
+  font-size: 14px;
+  color: #b8860b;
+}
+.booster-coins .bc-icon { font-size: 16px; }
+
 @keyframes boosterPulse {
   from { transform: scale(1); }
   to   { transform: scale(1.08); }
@@ -357,6 +394,46 @@ body {
 }
 
 .booster-hint.hidden { display: none; }
+
+/* Manual mode rotation pads — overlay the bottom corners of the play area */
+.manual-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 18px;
+  pointer-events: none;
+  z-index: 40;
+}
+.manual-controls.hidden { display: none; }
+.manual-rotate-btn {
+  pointer-events: auto;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgba(155, 81, 224, 0.5);
+  background: rgba(26, 10, 48, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 1.5em;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  box-shadow: 0 0 14px rgba(155, 81, 224, 0.3);
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.manual-rotate-btn.pressed {
+  background: rgba(155, 81, 224, 0.7);
+  transform: scale(0.92);
+}
 
 /* HUD live star tracker (under SCORE) — fills as score crosses thresholds */
 .star-track {
