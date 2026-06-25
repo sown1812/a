@@ -12,9 +12,9 @@ const FRUIT_CONFIGS = [
   { name: "Apple", emoji: "🍎", r: 40, color: "#991b1b", highlight: "#fca5a5" },       // Tier 5 (Deep Wine Red)
   { name: "Pear", emoji: "🍐", r: 48, color: "#fed330", highlight: "#fff1ad" },        // Tier 6 (Lemon Yellow)
   { name: "Peach", emoji: "🍑", r: 56, color: "#ffb8b8", highlight: "#ffd6dd" },       // Tier 7 (Soft Baby Pink)
-  { name: "Pineapple", emoji: "🍍", r: 65, color: "#f1c40f", highlight: "#fff3a6" },   // Tier 8 (Golden Yellow)
+  { name: "Pineapple", emoji: "🍍", r: 65, color: "#d97706", highlight: "#fde68a" },   // Tier 8 (Deep Amber — distinct from Pear's cold yellow)
   { name: "Melon", emoji: "🍈", r: 75, color: "#2ecc71", highlight: "#a3ffc6" },       // Tier 9 (Bright Green)
-  { name: "Watermelon", emoji: "🍉", r: 86, color: "#10ac84", highlight: "#7aff9e" }  // Tier 10 (Deep Emerald Green)
+  { name: "Watermelon", emoji: "🍉", r: 86, color: "#1d4ed8", highlight: "#bfdbfe" }  // Tier 10 (Royal Blue — unique in palette, epic final tier)
 ];
 
 // 2. Level Configs & Level Manager
@@ -41,17 +41,18 @@ class LevelManager {
         starScores: [0, 0, 0],
         preplaced: [
           { tier: 3, x: 233, y: 310 },
-          { tier: 3, x: 287, y: 310 },
           { tier: 2, x: 239, y: 262 },
-          { tier: 2, x: 281, y: 262 },
           { tier: 1, x: 244, y: 225 },
-          { tier: 1, x: 276, y: 225 },
           { tier: 0, x: 248, y: 197 },
-          { tier: 0, x: 272, y: 197 },
-          { tier: 5, x: 175, y: 335 },
-          { tier: 4, x: 348, y: 330 }
+          { tier: 5, x: 199.54, y: 429.55 },
+          { tier: 4, x: 171.64, y: 354.55 },
+          { tier: 6, x: 299.55, y: 415.87 },
+          { tier: 7, x: 353.18, y: 354.05 },
+          { tier: 8, x: 335.91, y: 279.5 },
+          { tier: 9, x: 134.09, y: 273.14 }
         ],
-        goals: []
+        goals: [
+        ]
       },
       {
         id: 1,

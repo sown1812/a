@@ -131,6 +131,41 @@
       </div>
     </div>
 
+    <!-- Offer Modal: dùng chung cho Revive + Booster purchase -->
+    <div id="offer-modal" class="offer-modal hidden">
+      <div class="offer-card animate-pop">
+        <div id="offer-icon" class="offer-modal-icon">💫</div>
+        <h3 id="offer-title" class="offer-modal-title">TIẾP TỤC?</h3>
+        <p id="offer-desc" class="offer-modal-desc">+5 lượt bắn để chơi tiếp</p>
+        <div class="offer-modal-actions">
+          <button id="offer-ad-btn" class="offer-btn offer-btn-ad">
+            <span class="offer-btn-icon">📺</span>
+            <span class="offer-btn-label">Xem Ads</span>
+            <span class="offer-btn-tag">MIỄN PHÍ</span>
+          </button>
+          <button id="offer-coin-btn" class="offer-btn offer-btn-coin">
+            <span class="offer-btn-icon">🪙</span>
+            <span class="offer-btn-label" id="offer-price-label">200 Coins</span>
+            <span class="offer-btn-tag" id="offer-balance-label">Bạn có: 0</span>
+          </button>
+        </div>
+        <button id="offer-skip-btn" class="offer-skip-link">Không, bỏ qua</button>
+      </div>
+    </div>
+
+    <!-- Demo Ads Banner (bottom of gameplay area) -->
+    <div class="ads-banner">
+      <span class="ads-banner-label">ADVERTISEMENT</span>
+      <div class="ads-banner-slot">
+        <span class="ads-banner-icon">📢</span>
+        <div class="ads-banner-body">
+          <span class="ads-banner-title">Your Ad Here</span>
+          <span class="ads-banner-sub">320 × 50 · Banner Ad</span>
+        </div>
+        <span class="ads-banner-cta">TAP</span>
+      </div>
+    </div>
+
     <!-- Tutorial Done Overlay (shown after tutorial merge step completes) -->
     <div id="tutorial-done-overlay" class="hidden" style="position:absolute;bottom:120px;left:0;right:0;display:flex;justify-content:center;pointer-events:none;z-index:50;">
       <button id="tutorial-done-btn" class="btn btn-primary" style="pointer-events:auto;padding:14px 36px;font-size:1.05em;box-shadow:0 0 24px rgba(155,81,224,0.6);">🚀 Bắt đầu chơi!</button>

@@ -357,6 +357,21 @@ class Game {
     _bindRotatePad('manual-left-btn', -1);
     _bindRotatePad('manual-right-btn', 1);
 
+    // Offer modal buttons (revive + booster purchase)
+    document.getElementById('offer-ad-btn')?.addEventListener('click', () => {
+      const cb = this._offerOnConfirm;
+      this._offerOnConfirm = null;
+      this._offerOnSkip = null;
+      this._offerWatchAd(cb);
+    });
+    document.getElementById('offer-coin-btn')?.addEventListener('click', () => {
+      this._offerPayCoins();
+    });
+    document.getElementById('offer-skip-btn')?.addEventListener('click', () => {
+      this._hideOffer();
+      if (this._offerOnSkip) { const fn = this._offerOnSkip; this._offerOnSkip = null; this._offerOnConfirm = null; fn(); }
+    });
+
     // Keyboard: Space shoots; ←/→ or A/D rotate the launcher in manual mode
     window.addEventListener('keydown', (e) => {
       if (this.state !== 'playing') return;
@@ -558,6 +573,7 @@ class Game {
     this.state = 'playing';
     this.isOverflowing = false;
     this.overflowTimer = 0;
+    this.hasUsedRevive = false;
     this.activeBooster = null;
     this.slowTimer = 0;
     this.mergeComboCount = 0;
@@ -573,6 +589,8 @@ class Game {
     this.orbitRadius = tutLevel ? tutLevel.orbitRadius : 220;
     this.warningLimit = tutLevel ? tutLevel.warningLimit : 200;
     this.physics.warningLimit = this.warningLimit;
+    this.physics.manualFloatMode = false;
+    this.physics.floatOrbitRadius = this.orbitRadius;
     this.physics.centers = (tutLevel && tutLevel.centers && tutLevel.centers.length)
       ? tutLevel.centers : [{ x: this.cx, y: this.cy }];
     this.physics.blackHoles = [];
@@ -655,6 +673,7 @@ class Game {
     this.state = 'playing';
     this.isOverflowing = false;
     this.overflowTimer = 0;
+    this.hasUsedRevive = false;
     this.activeBooster = null;
     this.slowTimer = 0;
     this.vacuumHeldFruitTier = null;
@@ -674,6 +693,8 @@ class Game {
     this.physics.portalPairs = [];
     this.physics.rails = [];
     this.physics.warningLimit = this.warningLimit;
+    this.physics.manualFloatMode = this.controlMode === 'manual';
+    this.physics.floatOrbitRadius = this.orbitRadius;
     this.levelManager.remainingSpawns = 999999;
 
     this.currentFruitTier = this.getRandomSpawnTier();
@@ -726,6 +747,7 @@ class Game {
     this.state = 'playing';
     this.isOverflowing = false;
     this.overflowTimer = 0;
+    this.hasUsedRevive = false;
     this.activeBooster = null;
     this.slowTimer = 0;
     this.vacuumHeldFruitTier = null;
@@ -736,6 +758,8 @@ class Game {
     this.warningLimit = lvl.warningLimit || 255;
     this.launcherSpeed = lvl.launcherSpeed || (0.95 + idx * 0.12);
     this.physics.warningLimit = this.warningLimit;
+    this.physics.manualFloatMode = this.controlMode === 'manual';
+    this.physics.floatOrbitRadius = this.orbitRadius;
 
     // Launcher orbit shape: 'circle' (default) or 'figure8' (lemniscate). aimNearest sends each
     // shot toward the closest gravity well instead of the canvas centre.
@@ -847,19 +871,20 @@ class Game {
     if (this.isTutorial) return 0;
     let maxTier;
     if (this.isEndlessMode) {
-      if (this.score < 500)       maxTier = 2;
-      else if (this.score < 1500) maxTier = 3;
-      else if (this.score < 3500) maxTier = 4;
-      else                        maxTier = 5;
+      maxTier = 7;
     } else {
       maxTier = this.levelManager.getCurrentLevel().maxSpawnTier;
     }
     const r = Math.random();
     let tier;
-    if (r < 0.45) tier = 0;
-    else if (r < 0.75) tier = 1;
-    else if (r < 0.90) tier = 2;
-    else tier = 3;
+    if (r < 0.35) tier = 0;
+    else if (r < 0.60) tier = 1;
+    else if (r < 0.75) tier = 2;
+    else if (r < 0.86) tier = 3;
+    else if (r < 0.93) tier = 4;
+    else if (r < 0.97) tier = 5;
+    else if (r < 0.99) tier = 6;
+    else tier = 7;
     return Math.min(tier, maxTier);
   }
 
@@ -974,10 +999,15 @@ class Game {
     const dx = aim.x - lx;
     const dy = aim.y - ly;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
-    const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
-    const massFactor = 1 - (this.vacuumHeldFruitTier * 0.015);
-    const finalSpeed = speed * massFactor;
+    let finalSpeed;
+    if (this.isManual()) {
+      finalSpeed = 3.5 + this.vacuumHeldFruitTier * 0.5;
+    } else {
+      const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
+      const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
+      const massFactor = 1 - (this.vacuumHeldFruitTier * 0.015);
+      finalSpeed = speed * massFactor;
+    }
     const vx = (dx / dist) * finalSpeed;
     const vy = (dy / dist) * finalSpeed;
     body.px = lx - vx;
@@ -1042,7 +1072,7 @@ class Game {
     body.deformVelX = -0.15;
     body.deformVelY = 0.15;
 
-    if (this.physics.bodies.length === 1) {
+    if (this.physics.bodies.length === 1 && !this.isManual()) {
       body.isFirstFruit = true;
     }
 
@@ -1051,12 +1081,16 @@ class Game {
     const dy = aim.y - ly;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    // Tốc độ phóng ban đầu rất chậm để nhìn rõ hoạt ảnh tăng tốc khi rơi vào tâm
-    const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
-    const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
-    // Quả lớn hơi chậm hơn chút:
-    const massFactor = 1 - (this.currentFruitTier * 0.015);
-    const finalSpeed = speed * massFactor;
+    let finalSpeed;
+    if (this.isManual()) {
+      finalSpeed = 3.5 + this.currentFruitTier * 0.5;
+    } else {
+      // Tốc độ phóng ban đầu rất chậm để nhìn rõ hoạt ảnh tăng tốc khi rơi vào tâm
+      const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
+      const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
+      const massFactor = 1 - (this.currentFruitTier * 0.015);
+      finalSpeed = speed * massFactor;
+    }
 
     const vx = (dx / dist) * finalSpeed;
     const vy = (dy / dist) * finalSpeed;
@@ -1185,33 +1219,29 @@ class Game {
       if (btn) { btn.classList.remove('shake'); void btn.offsetWidth; btn.classList.add('shake'); }
     };
 
-    if (this.coins < price) {
-      flashDeny();
+    const grantBooster = () => {
+      this.boosters[type] += 1;
+      localStorage.setItem(`planet_merge_ib_${type}`, this.boosters[type]);
+      this.audio.playClick();
+      this.particles.spawnConfetti(this.cx, this.width);
       this.floatingTexts.push({
-        x: this.cx, y: this.cy - 40, text: 'Không đủ 🪙!',
-        color: '#ff5e97', life: 1.3, scale: 0.08, vy: -2.0, rot: 0
+        x: this.cx, y: this.cy - 40, text: `${def.icon} +1`,
+        color: '#ffd56b', life: 1.3, scale: 0.08, vy: -2.0, rot: 0
       });
-      if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
-      return;
-    }
+      this.updateResourceHeader();
+      this.refreshBoosterUI();
+      this.useBooster(type);
+    };
 
-    if (!confirm(`Hết ${def.icon} rồi! Mua thêm 1 với ${price} 🪙?\n(Bạn đang có ${this.coins} 🪙)`)) return;
-
-    this.coins -= price;
-    this.boosters[type] += 1;
-    localStorage.setItem('planet_merge_coins', this.coins);
-    localStorage.setItem(`planet_merge_ib_${type}`, this.boosters[type]);
-    this.audio.playClick();
-    this.particles.spawnConfetti(this.cx, this.width);
-    this.floatingTexts.push({
-      x: this.cx, y: this.cy - 40, text: `${def.icon} +1`,
-      color: '#ffd56b', life: 1.3, scale: 0.08, vy: -2.0, rot: 0
+    this._showOffer({
+      mode: 'booster',
+      icon: def.icon,
+      title: `Hết ${def.icon}!`,
+      desc: `Mua thêm 1 lần dùng`,
+      price,
+      onConfirm: grantBooster,
+      onSkip: null
     });
-    this.updateResourceHeader();
-    this.refreshBoosterUI();
-
-    // One-tap top-up: now that the player owns one, use it straight away
-    this.useBooster(type);
   }
 
   // Find the settled fruit whose body contains the tapped point (nearest wins)
@@ -1581,6 +1611,24 @@ class Game {
       return;
     }
 
+    // Offer revive once per level before executing game over
+    if (!this.hasUsedRevive) {
+      this._showOffer({
+        mode: 'revive',
+        icon: '💫',
+        title: 'TIẾP TỤC?',
+        desc: '+5 lượt bắn để chơi tiếp',
+        price: 200,
+        onConfirm: () => this._doRevive(),
+        onSkip: () => this._executeGameOver()
+      });
+      return;
+    }
+
+    this._executeGameOver();
+  }
+
+  _executeGameOver() {
     const wasFullBefore = this.lives === this.maxHearts;
     this.lives = Math.max(0, this.lives - 1);
     localStorage.setItem('planet_merge_lives', this.lives);
@@ -1606,6 +1654,78 @@ class Game {
     });
 
     this.showScreen('gameover-screen');
+  }
+
+  _doRevive() {
+    this.hasUsedRevive = true;
+    this.levelManager.remainingSpawns += 5;
+    this.overflowTimer = 0;
+    this.isOverflowing = false;
+    this._loseDelay = null;
+    this.state = 'playing';
+    document.getElementById('warning-overlay')?.classList.add('hidden');
+    this.showScreen('none');
+    // Flash +5 shots text
+    this.floatingTexts.push({
+      x: this.cx, y: this.cy - 50,
+      text: '+5 SHOTS!', color: '#4ade80',
+      life: 1.6, scale: 0.09, vy: -2.5, rot: 0
+    });
+    this.updateHUDGoals();
+  }
+
+  // ── Generic offer modal (revive / booster) ──────────────
+  _showOffer({ mode, icon, title, desc, price, onConfirm, onSkip }) {
+    this._offerOnConfirm = onConfirm;
+    this._offerOnSkip = onSkip || null;
+    this._offerPrice = price;
+    this._offerMode = mode;
+
+    document.getElementById('offer-icon').textContent = icon;
+    document.getElementById('offer-title').textContent = title;
+    document.getElementById('offer-desc').textContent = desc;
+    document.getElementById('offer-price-label').textContent = `${price} Coins`;
+    document.getElementById('offer-balance-label').textContent = `Bạn có: ${this.coins} 🪙`;
+
+    const coinBtn = document.getElementById('offer-coin-btn');
+    if (coinBtn) coinBtn.disabled = this.coins < price;
+
+    document.getElementById('offer-skip-btn').textContent =
+      mode === 'revive' ? 'Không, từ bỏ' : 'Không cảm ơn';
+
+    document.getElementById('offer-modal').classList.remove('hidden');
+  }
+
+  _hideOffer() {
+    document.getElementById('offer-modal').classList.add('hidden');
+  }
+
+  _offerPayCoins() {
+    if (this.coins < this._offerPrice) return;
+    this.coins -= this._offerPrice;
+    localStorage.setItem('planet_merge_coins', this.coins);
+    this.updateResourceHeader();
+    this._hideOffer();
+    if (this._offerOnConfirm) this._offerOnConfirm();
+    this._offerOnConfirm = null;
+    this._offerOnSkip = null;
+  }
+
+  _offerWatchAd(callback) {
+    const adBtn = document.getElementById('offer-ad-btn');
+    const coinBtn = document.getElementById('offer-coin-btn');
+    const skipBtn = document.getElementById('offer-skip-btn');
+    if (adBtn) { adBtn.disabled = true; adBtn.querySelector('.offer-btn-label').textContent = 'Đang xem...'; }
+    if (coinBtn) coinBtn.disabled = true;
+    if (skipBtn) skipBtn.disabled = true;
+
+    // Mock: simulate 2s ad then grant reward
+    setTimeout(() => {
+      if (adBtn) { adBtn.disabled = false; adBtn.querySelector('.offer-btn-label').textContent = 'Xem Ads'; }
+      if (skipBtn) skipBtn.disabled = false;
+      this._hideOffer();
+      if (callback) callback();
+    }, 2000);
   }
 
   update(timestamp) {
@@ -1674,35 +1794,41 @@ class Game {
           }
         }
 
-        let overflowDetected = false;
-        for (const b of this.physics.bodies) {
-          // Measure overflow from the body's nearest gravity well (handles multi-center levels)
-          const c = this.physics.getNearestCenter(b.x, b.y);
-          const dx = b.x - c.x;
-          const dy = b.y - c.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (b.isSettled && dist > this.warningLimit) {
-            overflowDetected = true;
-            break;
-          }
-        }
-
-        if (overflowDetected) {
-          this.isOverflowing = true;
-          this.overflowTimer += 0.016 * dt * 1000;
-
-          const remaining = Math.max(0, Math.ceil((3000 - this.overflowTimer) / 1000));
-          document.getElementById('warning-timer').innerText = remaining;
-          document.getElementById('warning-overlay').classList.remove('hidden');
-
-          if (this.overflowTimer >= 3000) {
-            this.triggerLose();
-          }
-        } else {
+        if (this.isManual()) {
           this.isOverflowing = false;
           this.overflowTimer = 0;
           document.getElementById('warning-overlay').classList.add('hidden');
+        } else {
+          let overflowDetected = false;
+          for (const b of this.physics.bodies) {
+            // Measure overflow from the body's nearest gravity well (handles multi-center levels)
+            const c = this.physics.getNearestCenter(b.x, b.y);
+            const dx = b.x - c.x;
+            const dy = b.y - c.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (b.isSettled && dist > this.warningLimit) {
+              overflowDetected = true;
+              break;
+            }
+          }
+
+          if (overflowDetected) {
+            this.isOverflowing = true;
+            this.overflowTimer += 0.016 * dt * 1000;
+
+            const remaining = Math.max(0, Math.ceil((3000 - this.overflowTimer) / 1000));
+            document.getElementById('warning-timer').innerText = remaining;
+            document.getElementById('warning-overlay').classList.remove('hidden');
+
+            if (this.overflowTimer >= 3000) {
+              this.triggerLose();
+            }
+          } else {
+            this.isOverflowing = false;
+            this.overflowTimer = 0;
+            document.getElementById('warning-overlay').classList.add('hidden');
+          }
         }
 
         // Kiểm tra thua cuộc khi hết lượt bắn fruit (spawns limit) — không áp dụng cho endless mode
@@ -1819,34 +1945,42 @@ class Game {
 
     // Orbit radius ring — solid line showing the launcher's travel path (always centered on canvas center)
     if (this.orbitPath !== 'figure8') {
-      ctx.strokeStyle = 'rgba(180, 140, 255, 0.35)';
-      ctx.lineWidth = 1.5;
+      if (this.isManual()) {
+        ctx.strokeStyle = 'rgba(180, 140, 255, 0.55)';
+        ctx.lineWidth = 2.5;
+      } else {
+        ctx.strokeStyle = 'rgba(180, 140, 255, 0.35)';
+        ctx.lineWidth = 1.5;
+      }
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.arc(this.cx, this.cy, this.orbitRadius, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // Warning boundary line (dashed pink ring) — one per gravity well
-    if (this.isOverflowing) {
-      ctx.strokeStyle = 'rgba(255, 94, 151, 0.6)';
-      ctx.shadowColor = 'rgba(255, 94, 151, 0.4)';
-      ctx.shadowBlur = 8;
-    } else {
-      ctx.strokeStyle = 'rgba(155, 81, 224, 0.18)';
+    // Warning boundary line (dashed pink ring) — hidden in manual float mode
+    if (!this.isManual()) {
+      if (this.isOverflowing) {
+        ctx.strokeStyle = 'rgba(255, 94, 151, 0.6)';
+        ctx.shadowColor = 'rgba(255, 94, 151, 0.4)';
+        ctx.shadowBlur = 8;
+      } else {
+        ctx.strokeStyle = 'rgba(155, 81, 224, 0.18)';
+      }
+      ctx.lineWidth = 2.0;
+      ctx.setLineDash([4, 6]);
+      for (const c of this.physics.centers) {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, this.warningLimit, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
     }
-    ctx.lineWidth = 2.0;
-    ctx.setLineDash([4, 6]);
-    for (const c of this.physics.centers) {
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, this.warningLimit, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
     ctx.restore();
   }
 
   drawPlanetCore(ctx) {
+    if (this.isManual()) return;
     for (const c of this.physics.centers) {
       this.drawCoreAt(ctx, c.x, c.y);
     }
@@ -2163,7 +2297,7 @@ class Game {
     // Laser guide endpoint. Figure-8 / aimNearest: point straight at the well the shot will fall into.
     // Otherwise keep the classic radial beam (centroid for multi-well, safe-edge for single).
     let guideEndX, guideEndY;
-    if (this.orbitPath === 'figure8' || this.aimNearest) {
+    if (this.orbitPath === 'figure8' || this.aimNearest || this.isManual()) {
       const aim = this.getAimTarget(lx, ly);
       guideEndX = aim.x;
       guideEndY = aim.y;

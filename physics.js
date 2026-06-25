@@ -72,6 +72,8 @@ class PhysicsEngine {
     this.warningLimit = 255; // Expanded warning limit
     this.mergeAnimations = [];
     this.isPerfMode = localStorage.getItem('planet_merge_perf_mode') === 'true';
+    this.manualFloatMode = false;
+    this.floatOrbitRadius = 235;
   }
 
   clear() {
@@ -215,7 +217,7 @@ class PhysicsEngine {
 
       let ax = 0;
       let ay = 0;
-      if (dist > 0.1) {
+      if (!this.manualFloatMode && dist > 0.1) {
         // Lực hút tăng dần khi càng sát tâm (càng sát tâm rơi càng nhanh giống rơi tự do)
         // Tăng trọng lực đối với quả đang bay (chưa settled) để tạo cảm giác gia tốc rõ rệt hơn
         const gravMult = b.isSettled ? 1.0 : 1.7;
@@ -226,9 +228,11 @@ class PhysicsEngine {
 
       // Tăng ma sát/giảm quán tính khi đã dừng lại (b.isSettled = true) giúp ít di chuyển/bị trôi (Tăng nhẹ để giữ quán tính tự nhiên)
       // Tắt damping cho quả đầu tiên sau khi qua tâm để bảo toàn năng lượng → tốc độ quay về bằng tốc độ đi qua
-      const currentDamping = (b.isFirstFruit && b._fstate >= 1 && !b.isSettled)
-        ? 0.95
-        : (b.isSettled ? 0.945 : this.damping);
+      const currentDamping = this.manualFloatMode
+        ? (b.isSettled ? 0.945 : 0.96)
+        : ((b.isFirstFruit && b._fstate >= 1 && !b.isSettled)
+          ? 0.95
+          : (b.isSettled ? 0.945 : this.damping));
       let vx = (b.x - b.px) * currentDamping;
       let vy = (b.y - b.py) * currentDamping;
 
@@ -258,7 +262,7 @@ class PhysicsEngine {
       }
 
       // Pre-snap: quả đầu tiên đang về tâm, snap TRƯỚC khi update vị trí → không nhô qua tâm
-      if (b.isFirstFruit && this.centers.length === 1 && b._fstate === 2 && !b.isSettled && dist < 5) {
+      if (!this.manualFloatMode && b.isFirstFruit && this.centers.length === 1 && b._fstate === 2 && !b.isSettled && dist < 5) {
         b.x = ccx; b.y = ccy; b.px = ccx; b.py = ccy;
         b.isSettled = true;
         continue;
@@ -293,7 +297,7 @@ class PhysicsEngine {
       const postDx = b.x - ccx;
       const postDy = b.y - ccy;
       const postDist = Math.sqrt(postDx * postDx + postDy * postDy);
-      if (postDist < 1.6 && actualSpeed < 0.15) {
+      if (!this.manualFloatMode && postDist < 1.6 && actualSpeed < 0.15) {
         b.x = ccx;
         b.y = ccy;
         b.px = ccx;
@@ -302,7 +306,7 @@ class PhysicsEngine {
       }
 
       // Quả đầu tiên quay về tâm: snap dừng hẳn (tốc độ quay về = tốc độ đi qua, bảo toàn năng lượng nhờ damping=1)
-      if (b.isFirstFruit && this.centers.length === 1 && b._fstate === 2 && !b.isSettled && postDist < 10) {
+      if (!this.manualFloatMode && b.isFirstFruit && this.centers.length === 1 && b._fstate === 2 && !b.isSettled && postDist < 10) {
         b.x = ccx;
         b.y = ccy;
         b.px = ccx;
@@ -321,12 +325,16 @@ class PhysicsEngine {
       // Settle if inside the warning limit (safe zone) AND speed is low to allow overshoot anim to play
       // Loại quả đầu tiên: nó có cơ chế settle riêng (snap tâm), không để general check can thiệp
       if (!b.isSettled && !b.isFirstFruit) {
-        const dx = b.x - ccx;
-        const dy = b.y - ccy;
-        const dist = Math.sqrt(dx*dx + dy*dy);
         const speed = Math.sqrt(vx*vx + vy*vy);
-        if (dist < this.warningLimit - 10 && speed < 0.15) {
-          b.isSettled = true;
+        if (this.manualFloatMode) {
+          if (speed < 0.15) b.isSettled = true;
+        } else {
+          const dx = b.x - ccx;
+          const dy = b.y - ccy;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < this.warningLimit - 10 && speed < 0.15) {
+            b.isSettled = true;
+          }
         }
       }
     }
@@ -660,6 +668,33 @@ class PhysicsEngine {
           nextTier: nextTier,
           progress: 0
         });
+      }
+    }
+
+    // Manual float mode: enforce circular boundary after all collision resolution
+    if (this.manualFloatMode) {
+      const fCenter = this.centers[0];
+      for (const b of this.bodies) {
+        if (b.merged) continue;
+        const bdx = b.x - fCenter.x;
+        const bdy = b.y - fCenter.y;
+        const bdist = Math.sqrt(bdx * bdx + bdy * bdy);
+        const maxR = this.floatOrbitRadius - b.r * Math.min(1, b.scale);
+        if (bdist > maxR && bdist > 0.1) {
+          const nx = bdx / bdist;
+          const ny = bdy / bdist;
+          let cvx = b.x - b.px;
+          let cvy = b.y - b.py;
+          const vDotN = cvx * nx + cvy * ny;
+          if (vDotN > 0) {
+            cvx -= (1 + 0.3) * vDotN * nx;
+            cvy -= (1 + 0.3) * vDotN * ny;
+          }
+          b.x = fCenter.x + nx * maxR;
+          b.y = fCenter.y + ny * maxR;
+          b.px = b.x - cvx;
+          b.py = b.y - cvy;
+        }
       }
     }
 
