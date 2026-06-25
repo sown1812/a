@@ -907,7 +907,7 @@ class Game {
         const isMet = goal.current >= goal.count;
         if (isMet) badge.classList.add('completed');
         badge.innerHTML = `
-          <span style="font-size:14px; margin-right:4px;">${config.emoji}</span>
+          <span style="font-size:20px; margin-right:4px;">${config.emoji}</span>
           <span>${goal.current}/${goal.count}</span>
         `;
       }
