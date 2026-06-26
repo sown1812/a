@@ -9,18 +9,20 @@ class ParticleSystem {
   }
 
   spawnMergeEffect(x, y, color, count = 18) {
-    if (this.isPerfMode) count = Math.ceil(count * 0.5);
+    if (this.isPerfMode) count = Math.max(4, Math.ceil(count * 0.35));
     // Add expanding shockwave ring (Clean neutral white)
-    this.rings.push({
-      x: x,
-      y: y,
-      r: 6,
-      maxR: 35 + Math.random() * 10,
-      color: '#ffffff',
-      life: 1.0,
-      decay: 0.05,
-      isFlash: false
-    });
+    if (!this.isPerfMode || this.rings.length < 8) {
+      this.rings.push({
+        x: x,
+        y: y,
+        r: 6,
+        maxR: 35 + Math.random() * 10,
+        color: '#ffffff',
+        life: 1.0,
+        decay: 0.05,
+        isFlash: false
+      });
+    }
 
     // Spawn speedy star & circle particles (ASMR Satisfaction)
     for (let i = 0; i < count; i++) {
@@ -45,7 +47,7 @@ class ParticleSystem {
     }
 
     // Spawn Juice Splash Blobs (Vệt bắn loang màu của nước ép)
-    const splashCount = 10;
+    const splashCount = this.isPerfMode ? 3 : 10;
     for (let i = 0; i < splashCount; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 3.5 + Math.random() * 5.5;
@@ -67,7 +69,7 @@ class ParticleSystem {
   }
 
   spawnComboJuiceEffect(x, y, color, combo = 2) {
-    const comboRings = Math.min(3, combo + 1);
+    const comboRings = this.isPerfMode ? 1 : Math.min(3, combo + 1);
     for (let i = 0; i < comboRings; i++) {
       this.rings.push({
         x: x,
@@ -82,7 +84,7 @@ class ParticleSystem {
     }
 
     let burstCount = 12 + combo * 8;
-    if (this.isPerfMode) burstCount = Math.ceil(burstCount * 0.5);
+    if (this.isPerfMode) burstCount = Math.ceil(burstCount * 0.35);
     for (let i = 0; i < burstCount; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 3.8 + Math.random() * 6.8;
@@ -116,7 +118,7 @@ class ParticleSystem {
     });
 
     const colors = ['#ff3366', '#ffa502', '#ffe4a6', '#2ed573', '#2d9cdb', '#a55eea'];
-    const count = this.isPerfMode ? 20 : 45;
+    const count = this.isPerfMode ? 14 : 45;
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 5.0 + Math.random() * 9.0;
@@ -140,7 +142,7 @@ class ParticleSystem {
 
   spawnConfetti(cx, width) {
     const colors = ['#ff3366', '#ffa502', '#ffe4a6', '#2ed573', '#2d9cdb', '#a55eea', '#ff5e97'];
-    const count = this.isPerfMode ? 20 : 45;
+    const count = this.isPerfMode ? 12 : 45;
     for (let i = 0; i < count; i++) {
       this.particles.push({
         x: Math.random() * width,
@@ -164,6 +166,15 @@ class ParticleSystem {
   }
 
   update(dt, cx = 200, cy = 260) {
+    const maxParticles = this.isPerfMode ? 90 : 220;
+    const maxRings = this.isPerfMode ? 10 : 28;
+    if (this.particles.length > maxParticles) {
+      this.particles.splice(0, this.particles.length - maxParticles);
+    }
+    if (this.rings.length > maxRings) {
+      this.rings.splice(0, this.rings.length - maxRings);
+    }
+
     // Update rings
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i];
@@ -318,19 +329,21 @@ class ParticleSystem {
       isFlash: false
     });
     
-    this.rings.push({
-      x: x,
-      y: y,
-      r: 4,
-      maxR: 35 + Math.random() * 12,
-      color: color,
-      life: 0.8,
-      decay: 0.05,
-      isFlash: false
-    });
+    if (!this.isPerfMode) {
+      this.rings.push({
+        x: x,
+        y: y,
+        r: 4,
+        maxR: 35 + Math.random() * 12,
+        color: color,
+        life: 0.8,
+        decay: 0.05,
+        isFlash: false
+      });
+    }
 
     // 2. Splash droplets shooting outwards (water-like droplets)
-    const count = 10;
+    const count = this.isPerfMode ? 4 : 10;
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 2.0 + Math.random() * 3.5;

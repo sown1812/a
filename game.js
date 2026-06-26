@@ -18,6 +18,12 @@ class Game {
     this.height = 680;
     this.cx = 260;
     this.cy = 340;
+    this.mobilePerfTarget = this.isMobilePerformanceTarget();
+    this.maxCanvasDpr = this.mobilePerfTarget ? 1.35 : 2;
+
+    if (localStorage.getItem('planet_merge_perf_mode') === null) {
+      localStorage.setItem('planet_merge_perf_mode', this.mobilePerfTarget ? 'true' : 'false');
+    }
 
     this.planetRadius = 0; // No planet core, stack at exact center
     this.orbitRadius = 235; // Thắt quỹ đạo để quả không bị bay ra ngoài rìa màn hình
@@ -33,6 +39,7 @@ class Game {
     // Screen Juice Shake effect variables
     this.shakeIntensity = 0;
     this.shakeDecay = 0.86;
+    this.lastHapticTime = 0;
     this.mergeComboCount = 0;
     this.lastMergeTime = 0;
     this.comboTimer = 0;        // ms còn lại của cửa sổ combo hiện tại
@@ -48,11 +55,7 @@ class Game {
     this.launcherAngle = 0;
     this.launcherSpeed = 0.95;
 
-    // Control mode: 'auto' = launcher auto-orbits around the core (classic),
-    // 'manual' = player aims by hovering/dragging and releases to shoot.
-    this.controlMode = localStorage.getItem('planet_merge_control_mode') || 'auto';
-    this._manualRotateDir = 0;     // -1 = rotate left, +1 = rotate right, 0 = idle (manual mode)
-    this.manualRotateSpeed = 1.9;  // rotation responsiveness while a direction is held
+    this.controlMode = 'auto';
 
     this.currentFruitTier = 0;
     this.nextFruitTier = 0;
@@ -106,7 +109,6 @@ class Game {
     localStorage.setItem('planet_merge_coins', this.coins);
     localStorage.setItem('planet_merge_stars', this.stars);
     localStorage.setItem('planet_merge_lives', this.lives);
-    localStorage.setItem('planet_merge_perf_mode', 'false');
 
     this.setupUI();
     this.checkHeartRegen();
@@ -124,6 +126,21 @@ class Game {
 
     // Initial resource bar update
     this.updateResourceHeader();
+  }
+
+  isMobilePerformanceTarget() {
+    const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    const narrowScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 760;
+    const lowMemory = navigator.deviceMemory && navigator.deviceMemory <= 4;
+    return coarsePointer || narrowScreen || lowMemory;
+  }
+
+  haptic(pattern, minGap = 120) {
+    if (!navigator.vibrate) return;
+    const now = performance.now();
+    if (now - this.lastHapticTime < minGap) return;
+    this.lastHapticTime = now;
+    navigator.vibrate(pattern);
   }
 
   setupUI() {
@@ -155,15 +172,7 @@ class Game {
       this.renderLevelGrid();
     });
 
-    document.getElementById('tutorial-btn').addEventListener('click', () => {
-      this.audio.playClick();
-      this.startTutorial();
-    });
 
-    document.getElementById('tutorial-done-btn').addEventListener('click', () => {
-      this.audio.playClick();
-      this.endTutorial();
-    });
 
     // Mode toggle buttons
     const _updateModeButtons = () => {
@@ -186,26 +195,7 @@ class Game {
       _updateModeButtons();
     });
 
-    // Control mode toggle: auto-orbit vs manual aim
-    const _updateControlButtons = () => {
-      const aBtn = document.getElementById('control-auto-btn');
-      const mBtn = document.getElementById('control-manual-btn');
-      if (aBtn) aBtn.classList.toggle('active', this.controlMode === 'auto');
-      if (mBtn) mBtn.classList.toggle('active', this.controlMode === 'manual');
-    };
-    _updateControlButtons();
-    document.getElementById('control-auto-btn')?.addEventListener('click', () => {
-      this.audio.playClick();
-      this.controlMode = 'auto';
-      localStorage.setItem('planet_merge_control_mode', 'auto');
-      _updateControlButtons();
-    });
-    document.getElementById('control-manual-btn')?.addEventListener('click', () => {
-      this.audio.playClick();
-      this.controlMode = 'manual';
-      localStorage.setItem('planet_merge_control_mode', 'manual');
-      _updateControlButtons();
-    });
+
 
     document.getElementById('level-back-btn').addEventListener('click', () => {
       this.audio.playClick();
@@ -330,32 +320,8 @@ class Game {
         return;
       }
 
-      // Both modes: tapping the play area fires (manual aims via the ◀ ▶ pads / arrow keys)
       this.launchFruit();
     });
-
-    // Manual mode: hold the on-screen ◀ / ▶ pads to rotate the launcher
-    const _bindRotatePad = (id, dir) => {
-      const btn = document.getElementById(id);
-      if (!btn) return;
-      const press = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this._manualRotateDir = dir;
-        btn.classList.add('pressed');
-      };
-      const release = (e) => {
-        if (e) e.stopPropagation();
-        if (this._manualRotateDir === dir) this._manualRotateDir = 0;
-        btn.classList.remove('pressed');
-      };
-      btn.addEventListener('pointerdown', press);
-      btn.addEventListener('pointerup', release);
-      btn.addEventListener('pointerleave', release);
-      btn.addEventListener('pointercancel', release);
-    };
-    _bindRotatePad('manual-left-btn', -1);
-    _bindRotatePad('manual-right-btn', 1);
 
     // Offer modal buttons (revive + booster purchase)
     document.getElementById('offer-ad-btn')?.addEventListener('click', () => {
@@ -372,7 +338,7 @@ class Game {
       if (this._offerOnSkip) { const fn = this._offerOnSkip; this._offerOnSkip = null; this._offerOnConfirm = null; fn(); }
     });
 
-    // Keyboard: Space shoots; ←/→ or A/D rotate the launcher in manual mode
+    // Keyboard: Space shoots
     window.addEventListener('keydown', (e) => {
       if (this.state !== 'playing') return;
       if (e.code === 'Space') {
@@ -380,14 +346,6 @@ class Game {
         this.launchFruit();
         return;
       }
-      if (this.isManual()) {
-        if (e.code === 'ArrowLeft' || e.code === 'KeyA') { e.preventDefault(); this._manualRotateDir = -1; }
-        else if (e.code === 'ArrowRight' || e.code === 'KeyD') { e.preventDefault(); this._manualRotateDir = 1; }
-      }
-    });
-    window.addEventListener('keyup', (e) => {
-      if ((e.code === 'ArrowLeft' || e.code === 'KeyA') && this._manualRotateDir === -1) this._manualRotateDir = 0;
-      else if ((e.code === 'ArrowRight' || e.code === 'KeyD') && this._manualRotateDir === 1) this._manualRotateDir = 0;
     });
   }
 
@@ -434,9 +392,13 @@ class Game {
     const parent = this.canvas.parentElement;
     const rect = parent.getBoundingClientRect();
 
-    const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
+    const rawDpr = window.devicePixelRatio || 1;
+    const perfMode = localStorage.getItem('planet_merge_perf_mode') === 'true';
+    const dpr = Math.max(1, Math.min(rawDpr, perfMode ? 1.25 : this.maxCanvasDpr));
+    const pixelWidth = Math.max(1, Math.round(rect.width * dpr));
+    const pixelHeight = Math.max(1, Math.round(rect.height * dpr));
+    if (this.canvas.width !== pixelWidth) this.canvas.width = pixelWidth;
+    if (this.canvas.height !== pixelHeight) this.canvas.height = pixelHeight;
 
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     const drawScaleX = this.canvas.width / (this.width * dpr);
@@ -561,90 +523,9 @@ class Game {
     }
   }
 
-  startTutorial() {
-    this.isTutorial = true;
-    this.tutorialMode = true;
-    this.tutorialStep = 0;
 
-    // Reset state
-    this.physics.clear();
-    this.floatingTexts = [];
-    this.score = 0;
-    this.state = 'playing';
-    this.isOverflowing = false;
-    this.overflowTimer = 0;
-    this.hasUsedRevive = false;
-    this.activeBooster = null;
-    this.slowTimer = 0;
-    this.mergeComboCount = 0;
-    this.comboTimer = 0;
-    this.comboWindowDuration = 0;
-    this.launcherAngle = -Math.PI / 2;
-    this.launchCooldown = false;
 
-    // Load tutorial level config (id: 0) — editable via editor.html
-    const tutLevel = this.levelManager.levels.find(l => l.id === 0);
 
-    // Physics setup — single core, no hazards
-    this.orbitRadius = tutLevel ? tutLevel.orbitRadius : 220;
-    this.warningLimit = tutLevel ? tutLevel.warningLimit : 200;
-    this.physics.warningLimit = this.warningLimit;
-    this.physics.manualFloatMode = false;
-    this.physics.floatOrbitRadius = this.orbitRadius;
-    this.physics.centers = (tutLevel && tutLevel.centers && tutLevel.centers.length)
-      ? tutLevel.centers : [{ x: this.cx, y: this.cy }];
-    this.physics.blackHoles = [];
-    this.physics.shrinkZones = [];
-    this.physics.portalPairs = [];
-    this.physics.rails = [];
-    this.physics._onAbsorb = null;
-    this.physics._onShrink = null;
-    this.physics._onPortal = null;
-    this.physics._onRailBounce = null;
-
-    // Infinite spawns — tutorial only needs ~3 shots
-    this.levelManager.remainingSpawns = 999;
-
-    // Pre-place fruits from tutorial level config
-    const tutPreplaced = (tutLevel && tutLevel.preplaced) ? tutLevel.preplaced : [];
-    for (const { tier, x, y } of tutPreplaced) {
-      const b = this.physics.addBody(x, y, tier);
-      b.scale = 1.0; b.targetScale = 1.0;
-      b.isSettled = true;
-      b.px = b.x; b.py = b.y;
-      b.mergeDelayFrames = 2;
-    }
-
-    // Always spawn cherries in tutorial
-    this.currentFruitTier = 0;
-    this.nextFruitTier = 0;
-
-    // Hide all HUD noise
-    const hud = document.querySelector('.hud');
-    if (hud) hud.classList.add('hidden');
-    document.getElementById('warning-overlay').classList.add('hidden');
-    document.getElementById('tutorial-done-overlay').classList.add('hidden');
-    this.showBoosterBar(false);
-
-    this.showScreen('none');
-    this.updatePreviewCanvas();
-    this.lastTime = performance.now();
-  }
-
-  endTutorial() {
-    this.isTutorial = false;
-    this.tutorialMode = false;
-    this.tutorialStep = 0;
-    this.state = 'menu';
-
-    // Restore HUD
-    const hud = document.querySelector('.hud');
-    if (hud) hud.classList.remove('hidden');
-    document.getElementById('tutorial-done-overlay').classList.add('hidden');
-
-    this.physics.clear();
-    this.showScreen('menu-screen');
-  }
 
   _restoreHUD() {
     const spawnInfo = document.querySelector('.spawn-info');
@@ -662,7 +543,6 @@ class Game {
     }
 
     this.isEndlessMode = true;
-    this.tutorialMode = false;
     this.physics.clear();
     this.particles.particles = [];
     this.particles.rings = [];
@@ -693,7 +573,7 @@ class Game {
     this.physics.portalPairs = [];
     this.physics.rails = [];
     this.physics.warningLimit = this.warningLimit;
-    this.physics.manualFloatMode = this.controlMode === 'manual';
+
     this.physics.floatOrbitRadius = this.orbitRadius;
     this.levelManager.remainingSpawns = 999999;
 
@@ -758,7 +638,7 @@ class Game {
     this.warningLimit = lvl.warningLimit || 255;
     this.launcherSpeed = lvl.launcherSpeed || (0.95 + idx * 0.12);
     this.physics.warningLimit = this.warningLimit;
-    this.physics.manualFloatMode = this.controlMode === 'manual';
+
     this.physics.floatOrbitRadius = this.orbitRadius;
 
     // Launcher orbit shape: 'circle' (default) or 'figure8' (lemniscate). aimNearest sends each
@@ -839,13 +719,7 @@ class Game {
       }
     }
 
-    if (lvl.id === 1) {
-      this.tutorialMode = true;
-      this.tutorialStep = 0;
-      this.launcherAngle = -Math.PI / 2;
-    } else {
-      this.tutorialMode = false;
-    }
+
 
     this.currentFruitTier = this.getRandomSpawnTier();
     this.nextFruitTier = this.getRandomSpawnTier();
@@ -868,7 +742,7 @@ class Game {
   }
 
   getRandomSpawnTier() {
-    if (this.isTutorial) return 0;
+
     let maxTier;
     if (this.isEndlessMode) {
       maxTier = 7;
@@ -1000,21 +874,17 @@ class Game {
     const dy = aim.y - ly;
     const dist = Math.sqrt(dx * dx + dy * dy);
     let finalSpeed;
-    if (this.isManual()) {
-      finalSpeed = 3.5 + this.vacuumHeldFruitTier * 0.5;
-    } else {
-      const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
-      const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
-      const massFactor = 1 - (this.vacuumHeldFruitTier * 0.015);
-      finalSpeed = speed * massFactor;
-    }
+    const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
+    const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
+    const massFactor = 1 - (this.vacuumHeldFruitTier * 0.015);
+    finalSpeed = speed * massFactor;
     const vx = (dx / dist) * finalSpeed;
     const vy = (dy / dist) * finalSpeed;
     body.px = lx - vx;
     body.py = ly - vy;
 
     this.audio.playDrop && this.audio.playDrop();
-    if (navigator.vibrate) navigator.vibrate(10);
+    this.haptic(10, 120);
 
     this.vacuumHeldFruitTier = null;
     this.updateVacuumCanvas();
@@ -1022,16 +892,7 @@ class Game {
     setTimeout(() => { this.launchCooldown = false; }, this.cooldownTime);
   }
 
-  // Manual control is active only outside the scripted tutorial (level 1 keeps the guided auto-orbit)
-  isManual() {
-    return this.controlMode === 'manual' && !this.tutorialMode;
-  }
 
-  // Show the ◀ ▶ rotation pads only while actively playing in manual mode
-  updateManualControls() {
-    const pad = document.getElementById('manual-controls');
-    if (pad) pad.classList.toggle('hidden', !(this.state === 'playing' && this.isManual()));
-  }
 
   // Launcher position for a given orbit angle — circle by default, figure-8 (Gerono lemniscate) when set.
   // Figure-8 is vertical: two lobes stacked top/bottom, crossing at the canvas centre.
@@ -1060,9 +921,7 @@ class Game {
     if (this.launchCooldown || this.levelManager.remainingSpawns <= 0) return;
     this.launchCooldown = true;
 
-    if (this.tutorialMode && this.tutorialStep === 0) {
-      this.tutorialStep = 1;
-    }
+
 
     const pos = this.getLauncherPos(this.launcherAngle);
     const lx = pos.x;
@@ -1072,7 +931,7 @@ class Game {
     body.deformVelX = -0.15;
     body.deformVelY = 0.15;
 
-    if (this.physics.bodies.length === 1 && !this.isManual()) {
+    if (this.physics.bodies.length === 1) {
       body.isFirstFruit = true;
     }
 
@@ -1082,15 +941,11 @@ class Game {
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     let finalSpeed;
-    if (this.isManual()) {
-      finalSpeed = 3.5 + this.currentFruitTier * 0.5;
-    } else {
-      // Tốc độ phóng ban đầu rất chậm để nhìn rõ hoạt ảnh tăng tốc khi rơi vào tâm
-      const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
-      const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
-      const massFactor = 1 - (this.currentFruitTier * 0.015);
-      finalSpeed = speed * massFactor;
-    }
+    // Tốc độ phóng ban đầu rất chậm để nhìn rõ hoạt ảnh tăng tốc khi rơi vào tâm
+    const baseSpeed = Math.sqrt(2 * this.physics.gravity * 300 * dist / 400);
+    const speed = Math.max(0.1, Math.min(baseSpeed * 0.2, 1.2));
+    const massFactor = 1 - (this.currentFruitTier * 0.015);
+    finalSpeed = speed * massFactor;
 
     const vx = (dx / dist) * finalSpeed;
     const vy = (dy / dist) * finalSpeed;
@@ -1099,7 +954,7 @@ class Game {
     body.py = ly - vy;
 
     this.audio.playDrop();
-    if (navigator.vibrate) navigator.vibrate(10); // Rung chạm bắn siêu nhẹ
+    this.haptic(10, 120); // Rung chạm bắn siêu nhẹ
 
     this.levelManager.remainingSpawns--;
 
@@ -1176,8 +1031,7 @@ class Game {
       this.mergeComboCount = 0;
       this.updateComboUI();
     }
-    this._manualRotateDir = 0;
-    this.updateManualControls();
+
     this.refreshBoosterUI();
   }
 
@@ -1283,7 +1137,7 @@ class Game {
       if (idx !== -1) this.physics.bodies.splice(idx, 1);
       this.particles.spawnMergeEffect(body.x, body.y, '#9b51e0', 10);
       this.audio.playDrop && this.audio.playDrop();
-      if (navigator.vibrate) navigator.vibrate(20);
+      this.haptic(20, 160);
       this.floatingTexts.push({
         x: body.x, y: body.y - 10, text: '🌀 HELD!',
         color: '#9b51e0', life: 1.0, scale: 0.08, vy: -1.6, rot: 0
@@ -1325,7 +1179,7 @@ class Game {
 
     this.particles.spawnMergeEffect(body.x, body.y, config.color, 14 + newTier * 2);
     this.audio.playMerge && this.audio.playMerge(newTier);
-    if (navigator.vibrate) navigator.vibrate(16);
+    this.haptic(16, 160);
   }
 
   // Booster 3: temporarily slow the orbiting launcher
@@ -1336,7 +1190,7 @@ class Game {
       x: this.cx, y: this.cy - 40, text: '🐢 SLOW!',
       color: '#2d9cdb', life: 1.4, scale: 0.08, vy: -2.0, rot: 0
     });
-    if (navigator.vibrate) navigator.vibrate(12);
+    this.haptic(12, 160);
   }
 
   // Booster 4: blast every fruit into a chaotic tumble — they fly around, then the wells pull them back
@@ -1374,7 +1228,7 @@ class Game {
       color: '#9b51e0', life: 1.3, scale: 0.08, vy: -2.0, rot: 0
     });
     this.audio.playDrop && this.audio.playDrop();
-    if (navigator.vibrate) navigator.vibrate([15, 30, 15, 30, 15]);
+    this.haptic([15, 30, 15, 30, 15], 350);
   }
 
   addScore(points, x = this.cx, y = this.cy, color = '#ff5e97', showFloatingText = true) {
@@ -1405,21 +1259,13 @@ class Game {
   handleMerge(midX, midY, currentTier, nextTier) {
     this.audio.playMerge(nextTier);
 
-    if (this.tutorialMode && this.tutorialStep === 1) {
-      this.tutorialStep = 2;
-      if (this.isTutorial) {
-        setTimeout(() => {
-          const doneEl = document.getElementById('tutorial-done-overlay');
-          if (doneEl) doneEl.classList.remove('hidden');
-        }, 2200);
-      }
-    }
+
 
     if (navigator.vibrate) {
       if (nextTier >= 3) {
-        navigator.vibrate([25, 35, 20]); // Double haptic rumble for larger fruit
+        this.haptic([25, 35, 20], 260); // Double haptic rumble for larger fruit
       } else {
-        navigator.vibrate(18); // Single snap rumble for smaller fruit
+        this.haptic(18, 180); // Single snap rumble for smaller fruit
       }
     }
 
@@ -1532,12 +1378,12 @@ class Game {
   }
 
   triggerWin() {
-    if (this.isTutorial) return;
+
     if (this.state !== 'playing') return;
     this.state = 'win';
     this.levelManager.unlockNextLevel();
     this.audio.playWin();
-    if (navigator.vibrate) navigator.vibrate([50, 50, 50, 50, 100]); // Celebrate!
+    this.haptic([50, 50, 50, 50, 100], 600); // Celebrate!
 
     // Bonus score from remaining shots before calculating stars
     const lvl = this.levelManager.getCurrentLevel();
@@ -1591,11 +1437,11 @@ class Game {
   }
 
   triggerLose() {
-    if (this.isTutorial) return;
+
     if (this.state !== 'playing') return;
     this.state = 'gameover';
     this.audio.playLose();
-    if (navigator.vibrate) navigator.vibrate([100, 80, 150]);
+    this.haptic([100, 80, 150], 600);
 
     if (this.isEndlessMode) {
       const isNew = this.score > this.endlessHighscore;
@@ -1739,14 +1585,7 @@ class Game {
 
       if (this.state === 'playing') {
         let currentSpeed = this.launcherSpeed;
-        if (this.tutorialMode) {
-          if (this.tutorialStep === 0) {
-            currentSpeed = 0;
-            this.launcherAngle = -Math.PI / 2;
-          } else if (this.tutorialStep === 1) {
-            currentSpeed = this.launcherSpeed * 0.35;
-          }
-        }
+
 
         // Booster 3: slow the orbit while the timer is active
         if (this.slowTimer > 0) {
@@ -1765,12 +1604,7 @@ class Game {
           this.updateComboUI();
         }
 
-        if (this.isManual()) {
-          // Manual: player rotates the launcher with the ◀ ▶ pads or ←/→ (A/D) keys
-          this.launcherAngle += this._manualRotateDir * this.manualRotateSpeed * 0.016 * dt;
-        } else {
-          this.launcherAngle += currentSpeed * 0.016 * dt;
-        }
+        this.launcherAngle += currentSpeed * 0.016 * dt;
         if (this.launcherAngle >= Math.PI * 2) this.launcherAngle -= Math.PI * 2;
         if (this.launcherAngle < 0) this.launcherAngle += Math.PI * 2;
       }
@@ -1794,11 +1628,7 @@ class Game {
           }
         }
 
-        if (this.isManual()) {
-          this.isOverflowing = false;
-          this.overflowTimer = 0;
-          document.getElementById('warning-overlay').classList.add('hidden');
-        } else {
+        {
           let overflowDetected = false;
           for (const b of this.physics.bodies) {
             // Measure overflow from the body's nearest gravity well (handles multi-center levels)
@@ -1922,7 +1752,7 @@ class Game {
       this.drawLauncher(ctx);
     }
 
-    this.drawTutorial(ctx);
+
     ctx.restore();
   }
 
@@ -1945,21 +1775,16 @@ class Game {
 
     // Orbit radius ring — solid line showing the launcher's travel path (always centered on canvas center)
     if (this.orbitPath !== 'figure8') {
-      if (this.isManual()) {
-        ctx.strokeStyle = 'rgba(180, 140, 255, 0.55)';
-        ctx.lineWidth = 2.5;
-      } else {
-        ctx.strokeStyle = 'rgba(180, 140, 255, 0.35)';
-        ctx.lineWidth = 1.5;
-      }
+      ctx.strokeStyle = 'rgba(180, 140, 255, 0.35)';
+      ctx.lineWidth = 1.5;
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.arc(this.cx, this.cy, this.orbitRadius, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // Warning boundary line (dashed pink ring) — hidden in manual float mode
-    if (!this.isManual()) {
+    // Warning boundary line (dashed pink ring)
+    {
       if (this.isOverflowing) {
         ctx.strokeStyle = 'rgba(255, 94, 151, 0.6)';
         ctx.shadowColor = 'rgba(255, 94, 151, 0.4)';
@@ -1980,7 +1805,7 @@ class Game {
   }
 
   drawPlanetCore(ctx) {
-    if (this.isManual()) return;
+
     for (const c of this.physics.centers) {
       this.drawCoreAt(ctx, c.x, c.y);
     }
@@ -2297,7 +2122,7 @@ class Game {
     // Laser guide endpoint. Figure-8 / aimNearest: point straight at the well the shot will fall into.
     // Otherwise keep the classic radial beam (centroid for multi-well, safe-edge for single).
     let guideEndX, guideEndY;
-    if (this.orbitPath === 'figure8' || this.aimNearest || this.isManual()) {
+    if (this.orbitPath === 'figure8' || this.aimNearest) {
       const aim = this.getAimTarget(lx, ly);
       guideEndX = aim.x;
       guideEndY = aim.y;
@@ -2371,189 +2196,7 @@ class Game {
     ctx.restore();
   }
 
-  drawHandPointer(ctx, hx, hy) {
-    ctx.save();
-    ctx.translate(hx, hy);
-    // Bouncing effect
-    const bounce = Math.sin(Date.now() / 150) * 6;
-    ctx.translate(0, bounce);
-    ctx.rotate(-Math.PI / 8);
 
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#3d2f6d';
-    ctx.lineWidth = 2.8;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    // Simple cute vector pointer hand path
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(0, -20);
-    ctx.arc(3, -20, 3, Math.PI, 0);
-    ctx.lineTo(6, -10);
-    ctx.arc(9, -10, 3, Math.PI, 0);
-    ctx.lineTo(12, -10);
-    ctx.arc(15, -10, 3, Math.PI, 0);
-    ctx.lineTo(18, -10);
-    ctx.arc(21, -10, 3, Math.PI, 0);
-    ctx.lineTo(24, 0);
-    ctx.quadraticCurveTo(24, 10, 12, 10);
-    ctx.quadraticCurveTo(0, 10, 0, 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  drawTutorial(ctx) {
-    if (!this.tutorialMode) return;
-
-    ctx.save();
-    const cx = this.cx;
-    const cy = this.cy;
-
-    const lx = cx + Math.cos(this.launcherAngle) * this.orbitRadius;
-    const ly = cy + Math.sin(this.launcherAngle) * this.orbitRadius;
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.90)';
-    ctx.strokeStyle = '#9b51e0';
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-
-    ctx.shadowColor = 'rgba(155, 81, 224, 0.25)';
-    ctx.shadowBlur = 10;
-
-    const boxW = 360;
-    const boxH = 115; // Expanded height to hold visual mini-merge anim
-    const boxX = cx - boxW / 2;
-    const boxY = 25; // Shifted up to clear visual gameplay area
-
-    ctx.beginPath();
-    ctx.roundRect(boxX, boxY, boxW, boxH, 18);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-
-    ctx.font = 'bold 13.5px Fredoka';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#3d2f6d';
-
-    let textLine1 = "";
-    let textLine2 = "";
-
-    if (this.tutorialStep === 0) {
-      textLine1 = "👆 TAP để bắn Cherry xuống lõi!";
-      textLine2 = this.isTutorial ? "Thử tap vào màn hình đi!" : "Mục tiêu: tạo 1 quả Cam 🍊 để qua màn";
-
-      // Draw launching path guide line
-      const t = (Date.now() / 250) % 2;
-      ctx.strokeStyle = '#ff5e97';
-      ctx.lineWidth = 3.5;
-      ctx.setLineDash([6, 8]);
-
-      ctx.beginPath();
-      const arrowLength = this.orbitRadius - 32 - t * 8;
-      ctx.moveTo(lx, ly);
-      ctx.lineTo(cx, cy - arrowLength);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.fillStyle = '#ff5e97';
-      ctx.beginPath();
-      ctx.arc(cx, cy - arrowLength, 5.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Hand tap ripple effect at center
-      const rip = (Date.now() / 800) % 1.0;
-      ctx.strokeStyle = `rgba(155, 81, 224, ${1.0 - rip})`;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy + 90, rip * 35, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Tapping pointer hand bouncing
-      this.drawHandPointer(ctx, cx + 18, cy + 102);
-    }
-    else if (this.tutorialStep === 1) {
-      textLine1 = "🔄 Vòng phóng tự quay — tap khi muốn bắn!";
-      textLine2 = "Bắn Cherry vào gần quả vừa rơi để ghép 🍒+🍒";
-
-      // Draw alignment arrow
-      ctx.strokeStyle = 'rgba(255, 94, 151, 0.45)';
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(lx, ly);
-      ctx.lineTo(cx, cy);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Pulsing target ring around the first resting cherry
-      const firstCherry = this.physics.bodies[0];
-      if (firstCherry) {
-        const pulse = 1.0 + Math.sin(Date.now() / 150) * 0.15;
-        ctx.strokeStyle = '#ff5e97';
-        ctx.lineWidth = 2.0;
-        ctx.beginPath();
-        ctx.arc(firstCherry.x, firstCherry.y, firstCherry.r * pulse * 1.5, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // Hand pointer guide
-      this.drawHandPointer(ctx, cx + 18, cy + 120);
-    }
-    else if (this.tutorialStep === 2) {
-      textLine1 = "🎉 Hai Cherry hợp thành Strawberry 🍓!";
-      textLine2 = this.isTutorial ? "Cứ vậy mà chơi thôi! Nhấn nút để bắt đầu 👇" : "Tiếp tục merge để lên Cam 🍊 và qua màn!";
-    }
-
-    ctx.fillText(textLine1, cx, boxY + 22);
-    ctx.font = '600 11.5px Outfit';
-    ctx.fillStyle = '#7d6e9d';
-    ctx.fillText(textLine2, cx, boxY + 44);
-
-    // Render interactive mini-merge timeline animation inside the bubble box
-    const animTime = (Date.now() / 2400) % 1.0;
-    const ax = cx;
-    const ay = boxY + 84;
-
-    if (animTime < 0.45) {
-      // Two Cherries moving together
-      const p = animTime / 0.45;
-      const offset = 42 * (1.0 - p);
-      this.physics.drawFruitBody(ctx, ax - offset, ay, 9, 0);
-      this.physics.drawFace(ctx, ax - offset, ay, 9, false, 'normal', 0);
-      this.physics.drawFruitBody(ctx, ax + offset, ay, 9, 0);
-      this.physics.drawFace(ctx, ax + offset, ay, 9, false, 'normal', 0);
-    }
-    else if (animTime < 0.60) {
-      // Impact spark
-      ctx.save();
-      ctx.fillStyle = '#fffa7a';
-      ctx.shadowColor = '#ffd36b';
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      this.particles.drawStarPath(ctx, ax, ay, 5, 12, 5.5);
-      ctx.fill();
-      ctx.restore();
-    }
-    else {
-      // Evolved Strawberry pulsing
-      const p = (animTime - 0.60) / 0.40;
-      const scale = p < 0.25 ? 0.3 + (p / 0.25) * 0.7 : 1.0 + Math.sin((p - 0.25) * Math.PI) * 0.15;
-      ctx.save();
-      ctx.translate(ax, ay);
-      ctx.scale(scale, scale);
-      this.physics.drawFruitBody(ctx, 0, 0, 11, 1);
-      ctx.restore();
-    }
-
-    ctx.restore();
-  }
 
   drawFloatingTexts(ctx) {
     ctx.save();

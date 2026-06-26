@@ -189,31 +189,54 @@ body {
   text-shadow: 0 2px 5px rgba(60, 20, 120, 0.4);
 }
 
-/* ---- SCORE: white card, secondary size, stars beneath ---- */
+/* ---- SCORE: gold gradient pill ---- */
 .score-info {
   flex: 1;
-  border-top: 4px solid #f7b500;
+  background: linear-gradient(160deg, #f7b500 0%, #d48800 100%);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 5px 0 rgba(140, 90, 0, 0.35), 0 9px 16px rgba(200, 130, 0, 0.22),
+              inset 0 1px 3px rgba(255, 255, 255, 0.35);
+}
+.score-info .label {
+  color: rgba(255, 255, 255, 0.85);
 }
 .score-info .value {
   font-size: 22px;
-  color: #3d2f6d;
+  color: #ffffff;
+  text-shadow: 0 2px 5px rgba(120, 70, 0, 0.3);
+}
+.score-info .star-track .star {
+  color: rgba(255, 255, 255, 0.35);
+}
+.score-info .star-track .star.filled {
+  color: #ffffff;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
 }
 
-/* ---- SHOTS: white card, the active resource the player tracks ---- */
+/* ---- SHOTS: pink gradient pill (now lives in goal-row) ---- */
 .spawn-info {
-  flex: 1;
-  border-top: 4px solid #ff5e97;
+  flex: 0 0 auto;
+  min-width: 70px;
+  background: linear-gradient(160deg, #ff5e97 0%, #d93a75 100%);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 5px 0 rgba(160, 30, 80, 0.35), 0 9px 16px rgba(220, 60, 110, 0.22),
+              inset 0 1px 3px rgba(255, 255, 255, 0.35);
+}
+.spawn-info .label {
+  color: rgba(255, 255, 255, 0.85);
 }
 .spawn-info .value {
-  font-size: 26px;
-  color: #3d2f6d;
+  font-size: 24px;
+  color: #ffffff;
+  text-shadow: 0 2px 5px rgba(120, 0, 50, 0.3);
 }
 
 /* ===========================================================================
-   GOAL ROW — the primary objective panel, largest element of the HUD.
+   GOAL ROW — goal + shots side by side.
    =========================================================================== */
 .goal-row {
   display: flex;
+  gap: 10px;
   margin-bottom: 12px;
 }
 .goal-info {
@@ -223,12 +246,15 @@ body {
   gap: 14px;
   padding: 12px 18px;
   border-radius: 24px;
-  border-top: 4px solid #27ae60;
+  background: linear-gradient(160deg, #2ecc71 0%, #1a9e52 100%);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 5px 0 rgba(20, 110, 55, 0.35), 0 9px 16px rgba(30, 150, 75, 0.22),
+              inset 0 1px 3px rgba(255, 255, 255, 0.35);
 }
 .goal-info .label {
   font-size: 13px;
   letter-spacing: 1.5px;
-  color: #27ae60;
+  color: rgba(255, 255, 255, 0.9);
   margin-bottom: 0;
   flex: 0 0 auto;
 }
@@ -269,6 +295,21 @@ body {
   color: var(--accent-green);
   transform: scale(1.06);
   box-shadow: 0 2px 10px rgba(39, 174, 96, 0.22);
+}
+
+/* Goal badges on the green goal-info card */
+.goal-info .goal-badge {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.goal-info .goal-badge.completed {
+  background: rgba(255, 255, 255, 0.38);
+  border-color: rgba(255, 255, 255, 0.8);
+  color: #ffffff;
+  transform: scale(1.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* Play Area canvas wrapper */
@@ -446,45 +487,6 @@ body {
 
 .booster-hint.hidden { display: none; }
 
-/* Manual mode rotation pads — overlay the bottom corners of the play area */
-.manual-controls {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 16px;
-  display: flex;
-  justify-content: space-between;
-  padding: 0 18px;
-  pointer-events: none;
-  z-index: 40;
-}
-.manual-controls.hidden { display: none; }
-.manual-rotate-btn {
-  pointer-events: auto;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 2px solid rgba(155, 81, 224, 0.5);
-  background: rgba(26, 10, 48, 0.5);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  color: #fff;
-  font-size: 1.5em;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
-  box-shadow: 0 0 14px rgba(155, 81, 224, 0.3);
-  transition: transform 0.08s ease, background 0.15s ease;
-}
-.manual-rotate-btn.pressed {
-  background: rgba(155, 81, 224, 0.7);
-  transform: scale(0.92);
-}
 
 /* HUD live star tracker (under SCORE) — fills as score crosses thresholds */
 .star-track {
@@ -597,10 +599,27 @@ body {
   to   { transform: translateX(-50%) scale(1);    opacity: 1;   }
 }
 
-/* Home button in booster bar */
-.ingame-home-btn {
-  margin-left: 4px;
-  border-left: 1px solid rgba(115, 95, 157, 0.15);
+/* Home button in top HUD (top-right) */
+.hud-home-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 5px 0 rgba(176, 156, 217, 0.28), 0 9px 18px rgba(115, 95, 157, 0.16);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.12s ease, box-shadow 0.2s ease;
+}
+.hud-home-btn:active {
+  transform: scale(0.88);
+  box-shadow: 0 2px 0 rgba(176, 156, 217, 0.24), 0 4px 8px rgba(115, 95, 157, 0.12);
 }
 
 /* Warning Screen for game over countdown */
@@ -2215,4 +2234,315 @@ body {
   color: #fff;
   box-shadow: 0 4px 14px rgba(155, 81, 224, 0.35);
   transform: translateY(-1px);
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 760px) {
+  :root {
+    --font-family-title: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-family-body: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  .stars,
+  .stars2,
+  .stars3 {
+    animation: none;
+    opacity: 0.35;
+  }
+
+  .canvas-wrapper,
+  .glass-card,
+  .overlay-screen,
+  .bottom-nav,
+  .booster-btn,
+  .booster-coins,
+  .next-preview-panel,
+  .vacuum-hold-panel,
+  .resource-badge {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .game-container {
+    padding: max(8px, env(safe-area-inset-top)) 8px max(4px, env(safe-area-inset-bottom));
+    max-height: none;
+  }
+
+  .menu-container-overlay {
+    background: #f3eaff !important;
+    justify-content: flex-start;
+    padding: 10px 16px calc(76px + env(safe-area-inset-bottom)) 16px !important;
+    overflow: hidden;
+  }
+
+  .menu-header {
+    gap: 8px;
+    margin: 0 0 8px;
+    max-width: 340px;
+    flex-shrink: 0;
+  }
+
+  .resource-badge {
+    padding: 6px 12px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  .menu-content-wrapper {
+    flex: 1 1 auto;
+    align-items: flex-start;
+    margin: 0;
+    max-height: none;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 0 10px;
+  }
+
+  .menu-card {
+    max-width: 344px;
+    border-radius: 26px;
+    padding: 24px 20px 22px !important;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 14px 32px rgba(105, 85, 145, 0.16);
+  }
+
+  .game-title {
+    font-size: 38px;
+    margin-bottom: 5px;
+    text-shadow: none;
+  }
+
+  .game-subtitle {
+    font-size: 11px;
+    letter-spacing: 2.5px;
+    margin-bottom: 16px;
+  }
+
+  .progression-banner {
+    padding: 12px;
+    margin-bottom: 16px;
+    border-radius: 18px;
+  }
+
+  .mode-toggle {
+    width: 90%;
+    margin-bottom: 10px;
+  }
+
+  .mode-btn {
+    min-height: 52px;
+    padding: 8px 12px;
+    border-radius: 25px;
+    font-size: 13px;
+    line-height: 1.15;
+  }
+
+  .btn {
+    width: 90%;
+    min-height: 52px;
+    padding: 12px 20px;
+    margin-bottom: 10px;
+    border-radius: 26px;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+  }
+
+  .btn-play-large {
+    min-height: 56px;
+    padding: 14px 22px !important;
+    font-size: 17px !important;
+  }
+
+  .bottom-nav {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    height: 58px;
+  }
+
+  .hud {
+    gap: 7px;
+    margin-bottom: 7px;
+  }
+
+  .hud-item {
+    border-radius: 16px;
+    padding: 7px 9px;
+    box-shadow: 0 3px 0 rgba(176, 156, 217, 0.24), 0 5px 12px rgba(115, 95, 157, 0.12);
+  }
+
+  .score-info {
+    box-shadow: 0 3px 0 rgba(140, 90, 0, 0.3), 0 5px 12px rgba(200, 130, 0, 0.18),
+                inset 0 1px 2px rgba(255, 255, 255, 0.3);
+  }
+  .spawn-info {
+    box-shadow: 0 3px 0 rgba(160, 30, 80, 0.3), 0 5px 12px rgba(220, 60, 110, 0.18),
+                inset 0 1px 2px rgba(255, 255, 255, 0.3);
+  }
+  .goal-info {
+    box-shadow: 0 3px 0 rgba(20, 110, 55, 0.3), 0 5px 12px rgba(30, 150, 75, 0.18),
+                inset 0 1px 2px rgba(255, 255, 255, 0.3);
+  }
+
+  .hud-item:hover,
+  .next-preview-panel:hover,
+  .vacuum-hold-panel:hover,
+  .btn:hover,
+  .shop-item:hover,
+  .resource-badge:hover,
+  .nav-item:hover .nav-icon,
+  .hud-home-btn:hover {
+    transform: none;
+  }
+
+  .hud-home-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 19px;
+    box-shadow: 0 3px 0 rgba(176, 156, 217, 0.24), 0 5px 12px rgba(115, 95, 157, 0.12);
+  }
+
+  .spawn-info {
+    min-width: 60px;
+  }
+
+  .goal-row {
+    margin-bottom: 7px;
+  }
+
+  .goal-info {
+    border-radius: 18px;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .goal-badge {
+    padding: 5px 10px;
+    font-size: 14px;
+    border-radius: 15px;
+  }
+
+  .canvas-wrapper {
+    border-radius: 20px;
+    box-shadow: inset 0 2px 10px rgba(255, 255, 255, 0.42), 0 6px 16px rgba(115, 95, 157, 0.1);
+  }
+
+  .booster-bar {
+    gap: 8px;
+    padding: 5px 6px;
+  }
+
+  .booster-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    box-shadow: 0 3px 9px rgba(115, 95, 157, 0.16);
+  }
+
+  .booster-btn .booster-icon {
+    font-size: 22px;
+    filter: none;
+  }
+
+  .bottom-controls {
+    gap: 8px;
+    padding: 5px 6px 3px;
+  }
+
+  .ads-banner {
+    padding: 4px 0 6px;
+  }
+
+  .ads-banner-slot {
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .animate-pop,
+  .btn-pulse,
+  .booster-btn.active,
+  #victory-screen:not(.hidden),
+  #gameover-screen:not(.hidden),
+  #victory-screen:not(.hidden) .glass-card,
+  #gameover-screen:not(.hidden) .glass-card {
+    animation: none !important;
+  }
+}
+
+@media (hover: none) and (max-height: 720px), (pointer: coarse) and (max-height: 720px), (max-width: 760px) and (max-height: 720px) {
+  .menu-container-overlay {
+    padding-top: 8px !important;
+    padding-bottom: calc(68px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .menu-header {
+    display: none;
+  }
+
+  .menu-card {
+    padding: 20px 18px 18px !important;
+  }
+
+  .game-title {
+    font-size: 34px;
+  }
+
+  .game-subtitle {
+    margin-bottom: 12px;
+  }
+
+  .progression-banner {
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+
+  .btn,
+  .mode-btn {
+    min-height: 48px;
+    margin-bottom: 8px;
+  }
+
+  /* HUD compact for short screens */
+  .hud {
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+  .hud-item {
+    padding: 5px 7px;
+    border-radius: 14px;
+  }
+  .hud-item .label {
+    font-size: 8px;
+    letter-spacing: 1px;
+    margin-bottom: 0;
+  }
+  .hud-item .value {
+    font-size: 18px;
+  }
+  .level-info .value { font-size: 16px; }
+  .score-info .value { font-size: 17px; }
+  .spawn-info .value { font-size: 19px; }
+  .spawn-info { min-width: 54px; }
+  .hud-home-btn { width: 34px; height: 34px; font-size: 17px; }
+  .star-track { margin-top: 1px; }
+
+  .goal-row {
+    margin-bottom: 5px;
+  }
+  .goal-info {
+    padding: 6px 10px;
+    gap: 6px;
+    border-radius: 14px;
+  }
+  .goal-info .label {
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+  .goal-badge {
+    padding: 4px 9px;
+    font-size: 13px;
+    border-radius: 12px;
+  }
 }

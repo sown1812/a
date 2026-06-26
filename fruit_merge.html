@@ -199,54 +199,31 @@ body {
   text-shadow: 0 2px 5px rgba(60, 20, 120, 0.4);
 }
 
-/* ---- SCORE: gold gradient pill ---- */
+/* ---- SCORE: white card, secondary size, stars beneath ---- */
 .score-info {
   flex: 1;
-  background: linear-gradient(160deg, #f7b500 0%, #d48800 100%);
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 5px 0 rgba(140, 90, 0, 0.35), 0 9px 16px rgba(200, 130, 0, 0.22),
-              inset 0 1px 3px rgba(255, 255, 255, 0.35);
-}
-.score-info .label {
-  color: rgba(255, 255, 255, 0.85);
+  border-top: 4px solid #f7b500;
 }
 .score-info .value {
   font-size: 22px;
-  color: #ffffff;
-  text-shadow: 0 2px 5px rgba(120, 70, 0, 0.3);
-}
-.score-info .star-track .star {
-  color: rgba(255, 255, 255, 0.35);
-}
-.score-info .star-track .star.filled {
-  color: #ffffff;
-  text-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
+  color: #3d2f6d;
 }
 
-/* ---- SHOTS: pink gradient pill (now lives in goal-row) ---- */
+/* ---- SHOTS: white card, the active resource the player tracks ---- */
 .spawn-info {
-  flex: 0 0 auto;
-  min-width: 70px;
-  background: linear-gradient(160deg, #ff5e97 0%, #d93a75 100%);
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 5px 0 rgba(160, 30, 80, 0.35), 0 9px 16px rgba(220, 60, 110, 0.22),
-              inset 0 1px 3px rgba(255, 255, 255, 0.35);
-}
-.spawn-info .label {
-  color: rgba(255, 255, 255, 0.85);
+  flex: 1;
+  border-top: 4px solid #ff5e97;
 }
 .spawn-info .value {
-  font-size: 24px;
-  color: #ffffff;
-  text-shadow: 0 2px 5px rgba(120, 0, 50, 0.3);
+  font-size: 26px;
+  color: #3d2f6d;
 }
 
 /* ===========================================================================
-   GOAL ROW — goal + shots side by side.
+   GOAL ROW — the primary objective panel, largest element of the HUD.
    =========================================================================== */
 .goal-row {
   display: flex;
-  gap: 10px;
   margin-bottom: 12px;
 }
 .goal-info {
@@ -256,15 +233,12 @@ body {
   gap: 14px;
   padding: 12px 18px;
   border-radius: 24px;
-  background: linear-gradient(160deg, #2ecc71 0%, #1a9e52 100%);
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 5px 0 rgba(20, 110, 55, 0.35), 0 9px 16px rgba(30, 150, 75, 0.22),
-              inset 0 1px 3px rgba(255, 255, 255, 0.35);
+  border-top: 4px solid #27ae60;
 }
 .goal-info .label {
   font-size: 13px;
   letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.9);
+  color: #27ae60;
   margin-bottom: 0;
   flex: 0 0 auto;
 }
@@ -305,21 +279,6 @@ body {
   color: var(--accent-green);
   transform: scale(1.06);
   box-shadow: 0 2px 10px rgba(39, 174, 96, 0.22);
-}
-
-/* Goal badges on the green goal-info card */
-.goal-info .goal-badge {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.45);
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-.goal-info .goal-badge.completed {
-  background: rgba(255, 255, 255, 0.38);
-  border-color: rgba(255, 255, 255, 0.8);
-  color: #ffffff;
-  transform: scale(1.06);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* Play Area canvas wrapper */
@@ -609,27 +568,10 @@ body {
   to   { transform: translateX(-50%) scale(1);    opacity: 1;   }
 }
 
-/* Home button in top HUD (top-right) */
-.hud-home-btn {
-  flex: 0 0 auto;
-  align-self: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 5px 0 rgba(176, 156, 217, 0.28), 0 9px 18px rgba(115, 95, 157, 0.16);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  line-height: 1;
-  transition: transform 0.12s ease, box-shadow 0.2s ease;
-}
-.hud-home-btn:active {
-  transform: scale(0.88);
-  box-shadow: 0 2px 0 rgba(176, 156, 217, 0.24), 0 4px 8px rgba(115, 95, 157, 0.12);
+/* Home button in booster bar */
+.ingame-home-btn {
+  margin-left: 4px;
+  border-left: 1px solid rgba(115, 95, 157, 0.15);
 }
 
 /* Warning Screen for game over countdown */
@@ -2282,96 +2224,6 @@ body {
     max-height: none;
   }
 
-  .menu-container-overlay {
-    background: #f3eaff !important;
-    justify-content: flex-start;
-    padding: 10px 16px calc(76px + env(safe-area-inset-bottom)) 16px !important;
-    overflow: hidden;
-  }
-
-  .menu-header {
-    gap: 8px;
-    margin: 0 0 8px;
-    max-width: 340px;
-    flex-shrink: 0;
-  }
-
-  .resource-badge {
-    padding: 6px 12px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.9);
-  }
-
-  .menu-content-wrapper {
-    flex: 1 1 auto;
-    align-items: flex-start;
-    margin: 0;
-    max-height: none;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 0 0 10px;
-  }
-
-  .menu-card {
-    max-width: 344px;
-    border-radius: 26px;
-    padding: 24px 20px 22px !important;
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: 0 14px 32px rgba(105, 85, 145, 0.16);
-  }
-
-  .game-title {
-    font-size: 38px;
-    margin-bottom: 5px;
-    text-shadow: none;
-  }
-
-  .game-subtitle {
-    font-size: 11px;
-    letter-spacing: 2.5px;
-    margin-bottom: 16px;
-  }
-
-  .progression-banner {
-    padding: 12px;
-    margin-bottom: 16px;
-    border-radius: 18px;
-  }
-
-  .mode-toggle {
-    width: 90%;
-    margin-bottom: 10px;
-  }
-
-  .mode-btn {
-    min-height: 52px;
-    padding: 8px 12px;
-    border-radius: 25px;
-    font-size: 13px;
-    line-height: 1.15;
-  }
-
-  .btn {
-    width: 90%;
-    min-height: 52px;
-    padding: 12px 20px;
-    margin-bottom: 10px;
-    border-radius: 26px;
-    font-size: 15px;
-    letter-spacing: 0.5px;
-  }
-
-  .btn-play-large {
-    min-height: 56px;
-    padding: 14px 22px !important;
-    font-size: 17px !important;
-  }
-
-  .bottom-nav {
-    bottom: max(8px, env(safe-area-inset-bottom));
-    height: 58px;
-  }
-
   .hud {
     gap: 7px;
     margin-bottom: 7px;
@@ -2383,39 +2235,14 @@ body {
     box-shadow: 0 3px 0 rgba(176, 156, 217, 0.24), 0 5px 12px rgba(115, 95, 157, 0.12);
   }
 
-  .score-info {
-    box-shadow: 0 3px 0 rgba(140, 90, 0, 0.3), 0 5px 12px rgba(200, 130, 0, 0.18),
-                inset 0 1px 2px rgba(255, 255, 255, 0.3);
-  }
-  .spawn-info {
-    box-shadow: 0 3px 0 rgba(160, 30, 80, 0.3), 0 5px 12px rgba(220, 60, 110, 0.18),
-                inset 0 1px 2px rgba(255, 255, 255, 0.3);
-  }
-  .goal-info {
-    box-shadow: 0 3px 0 rgba(20, 110, 55, 0.3), 0 5px 12px rgba(30, 150, 75, 0.18),
-                inset 0 1px 2px rgba(255, 255, 255, 0.3);
-  }
-
   .hud-item:hover,
   .next-preview-panel:hover,
   .vacuum-hold-panel:hover,
   .btn:hover,
   .shop-item:hover,
   .resource-badge:hover,
-  .nav-item:hover .nav-icon,
-  .hud-home-btn:hover {
+  .nav-item:hover .nav-icon {
     transform: none;
-  }
-
-  .hud-home-btn {
-    width: 38px;
-    height: 38px;
-    font-size: 19px;
-    box-shadow: 0 3px 0 rgba(176, 156, 217, 0.24), 0 5px 12px rgba(115, 95, 157, 0.12);
-  }
-
-  .spawn-info {
-    min-width: 60px;
   }
 
   .goal-row {
@@ -2481,82 +2308,6 @@ body {
   }
 }
 
-@media (hover: none) and (max-height: 720px), (pointer: coarse) and (max-height: 720px), (max-width: 760px) and (max-height: 720px) {
-  .menu-container-overlay {
-    padding-top: 8px !important;
-    padding-bottom: calc(68px + env(safe-area-inset-bottom)) !important;
-  }
-
-  .menu-header {
-    display: none;
-  }
-
-  .menu-card {
-    padding: 20px 18px 18px !important;
-  }
-
-  .game-title {
-    font-size: 34px;
-  }
-
-  .game-subtitle {
-    margin-bottom: 12px;
-  }
-
-  .progression-banner {
-    padding: 10px;
-    margin-bottom: 12px;
-  }
-
-  .btn,
-  .mode-btn {
-    min-height: 48px;
-    margin-bottom: 8px;
-  }
-
-  /* HUD compact for short screens */
-  .hud {
-    gap: 5px;
-    margin-bottom: 5px;
-  }
-  .hud-item {
-    padding: 5px 7px;
-    border-radius: 14px;
-  }
-  .hud-item .label {
-    font-size: 8px;
-    letter-spacing: 1px;
-    margin-bottom: 0;
-  }
-  .hud-item .value {
-    font-size: 18px;
-  }
-  .level-info .value { font-size: 16px; }
-  .score-info .value { font-size: 17px; }
-  .spawn-info .value { font-size: 19px; }
-  .spawn-info { min-width: 54px; }
-  .hud-home-btn { width: 34px; height: 34px; font-size: 17px; }
-  .star-track { margin-top: 1px; }
-
-  .goal-row {
-    margin-bottom: 5px;
-  }
-  .goal-info {
-    padding: 6px 10px;
-    gap: 6px;
-    border-radius: 14px;
-  }
-  .goal-info .label {
-    font-size: 10px;
-    letter-spacing: 1px;
-  }
-  .goal-badge {
-    padding: 4px 9px;
-    font-size: 13px;
-    border-radius: 12px;
-  }
-}
-
   </style>
 </head>
 <body>
@@ -2581,20 +2332,19 @@ body {
           <span class="star">★</span><span class="star">★</span><span class="star">★</span>
         </div>
       </div>
-      <button id="ingame-home-btn" class="hud-home-btn" title="Về trang chủ">🏠</button>
+      <div class="hud-item spawn-info">
+        <span class="label">SHOTS</span>
+        <span id="spawn-display" class="value">0</span>
+      </div>
     </header>
 
-    <!-- GOAL + SHOTS row -->
+    <!-- GOAL: own row, the player's primary focus (Royal Match-style target) -->
     <div class="goal-row">
       <div class="hud-item goal-info">
         <span class="label">GOAL</span>
         <div id="goal-container" class="goal-badges">
           <!-- Dynamically populated goals, e.g. fruit badge with remaining count -->
         </div>
-      </div>
-      <div class="hud-item spawn-info">
-        <span class="label">SHOTS</span>
-        <span id="spawn-display" class="value">0</span>
       </div>
     </div>
 
@@ -2647,6 +2397,9 @@ body {
       <button class="booster-btn" data-booster="shuffle" title="Xáo trộn các quả. Hết thì chạm để mua 600 🪙">
         <span class="booster-icon">🔀</span>
         <span class="booster-count" id="booster-count-shuffle">0</span>
+      </button>
+      <button id="ingame-home-btn" class="booster-btn ingame-home-btn" title="Về trang chủ">
+        <span class="booster-icon">🏠</span>
       </button>
     </div>
 
@@ -4478,6 +4231,7 @@ class PhysicsEngine {
                   b1.lastCollisionTime = nowTime;
                   b2.lastCollisionTime = nowTime;
                   onCollisionCallback(b1.r / 86); // ratio relative to Watermelon size
+                  if (navigator.vibrate) navigator.vibrate(8); // Rung va chạm nhẹ
                 }
               }
             }
@@ -6018,7 +5772,6 @@ class Game {
     // Screen Juice Shake effect variables
     this.shakeIntensity = 0;
     this.shakeDecay = 0.86;
-    this.lastHapticTime = 0;
     this.mergeComboCount = 0;
     this.lastMergeTime = 0;
     this.comboTimer = 0;        // ms còn lại của cửa sổ combo hiện tại
@@ -6112,14 +5865,6 @@ class Game {
     const narrowScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 760;
     const lowMemory = navigator.deviceMemory && navigator.deviceMemory <= 4;
     return coarsePointer || narrowScreen || lowMemory;
-  }
-
-  haptic(pattern, minGap = 120) {
-    if (!navigator.vibrate) return;
-    const now = performance.now();
-    if (now - this.lastHapticTime < minGap) return;
-    this.lastHapticTime = now;
-    navigator.vibrate(pattern);
   }
 
   setupUI() {
@@ -6863,7 +6608,7 @@ class Game {
     body.py = ly - vy;
 
     this.audio.playDrop && this.audio.playDrop();
-    this.haptic(10, 120);
+    if (navigator.vibrate) navigator.vibrate(10);
 
     this.vacuumHeldFruitTier = null;
     this.updateVacuumCanvas();
@@ -6933,7 +6678,7 @@ class Game {
     body.py = ly - vy;
 
     this.audio.playDrop();
-    this.haptic(10, 120); // Rung chạm bắn siêu nhẹ
+    if (navigator.vibrate) navigator.vibrate(10); // Rung chạm bắn siêu nhẹ
 
     this.levelManager.remainingSpawns--;
 
@@ -7116,7 +6861,7 @@ class Game {
       if (idx !== -1) this.physics.bodies.splice(idx, 1);
       this.particles.spawnMergeEffect(body.x, body.y, '#9b51e0', 10);
       this.audio.playDrop && this.audio.playDrop();
-      this.haptic(20, 160);
+      if (navigator.vibrate) navigator.vibrate(20);
       this.floatingTexts.push({
         x: body.x, y: body.y - 10, text: '🌀 HELD!',
         color: '#9b51e0', life: 1.0, scale: 0.08, vy: -1.6, rot: 0
@@ -7158,7 +6903,7 @@ class Game {
 
     this.particles.spawnMergeEffect(body.x, body.y, config.color, 14 + newTier * 2);
     this.audio.playMerge && this.audio.playMerge(newTier);
-    this.haptic(16, 160);
+    if (navigator.vibrate) navigator.vibrate(16);
   }
 
   // Booster 3: temporarily slow the orbiting launcher
@@ -7169,7 +6914,7 @@ class Game {
       x: this.cx, y: this.cy - 40, text: '🐢 SLOW!',
       color: '#2d9cdb', life: 1.4, scale: 0.08, vy: -2.0, rot: 0
     });
-    this.haptic(12, 160);
+    if (navigator.vibrate) navigator.vibrate(12);
   }
 
   // Booster 4: blast every fruit into a chaotic tumble — they fly around, then the wells pull them back
@@ -7207,7 +6952,7 @@ class Game {
       color: '#9b51e0', life: 1.3, scale: 0.08, vy: -2.0, rot: 0
     });
     this.audio.playDrop && this.audio.playDrop();
-    this.haptic([15, 30, 15, 30, 15], 350);
+    if (navigator.vibrate) navigator.vibrate([15, 30, 15, 30, 15]);
   }
 
   addScore(points, x = this.cx, y = this.cy, color = '#ff5e97', showFloatingText = true) {
@@ -7242,9 +6987,9 @@ class Game {
 
     if (navigator.vibrate) {
       if (nextTier >= 3) {
-        this.haptic([25, 35, 20], 260); // Double haptic rumble for larger fruit
+        navigator.vibrate([25, 35, 20]); // Double haptic rumble for larger fruit
       } else {
-        this.haptic(18, 180); // Single snap rumble for smaller fruit
+        navigator.vibrate(18); // Single snap rumble for smaller fruit
       }
     }
 
@@ -7362,7 +7107,7 @@ class Game {
     this.state = 'win';
     this.levelManager.unlockNextLevel();
     this.audio.playWin();
-    this.haptic([50, 50, 50, 50, 100], 600); // Celebrate!
+    if (navigator.vibrate) navigator.vibrate([50, 50, 50, 50, 100]); // Celebrate!
 
     // Bonus score from remaining shots before calculating stars
     const lvl = this.levelManager.getCurrentLevel();
@@ -7420,7 +7165,7 @@ class Game {
     if (this.state !== 'playing') return;
     this.state = 'gameover';
     this.audio.playLose();
-    this.haptic([100, 80, 150], 600);
+    if (navigator.vibrate) navigator.vibrate([100, 80, 150]);
 
     if (this.isEndlessMode) {
       const isNew = this.score > this.endlessHighscore;

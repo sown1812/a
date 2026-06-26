@@ -32,29 +32,7 @@ class LevelManager {
     // <<LEVEL_EDITOR:START>> — Level Editor (editor.html) tự ghi đè vùng này. Đừng sửa/xoá 2 dòng marker START/END.
     this.levels = [
       {
-        id: 0,
-        maxSpawnTier: 0,
-        orbitRadius: 220,
-        warningLimit: 200,
-        launcherSpeed: 0.95,
-        maxSpawns: 999,
-        starScores: [0, 0, 0],
-        preplaced: [
-          { tier: 3, x: 233, y: 310 },
-          { tier: 2, x: 239, y: 262 },
-          { tier: 1, x: 244, y: 225 },
-          { tier: 0, x: 248, y: 197 },
-          { tier: 5, x: 199.54, y: 429.55 },
-          { tier: 4, x: 171.64, y: 354.55 },
-          { tier: 6, x: 299.55, y: 415.87 },
-          { tier: 7, x: 353.18, y: 354.05 },
-          { tier: 8, x: 335.91, y: 279.5 },
-          { tier: 9, x: 134.09, y: 273.14 }
-        ],
-        goals: [
-        ]
-      },
-      {
+
         id: 1,
         maxSpawnTier: 0,
         orbitRadius: 147,
@@ -100,7 +78,7 @@ class LevelManager {
         orbitRadius: 250,
         warningLimit: 80,
         launcherSpeed: 1.05,
-        maxSpawns: 25,
+        maxSpawns: 22,
         starScores: [700, 1400, 2200],
         centers: [
           { x: 196, y: 258.8 },
@@ -257,12 +235,12 @@ class LevelManager {
         starScores: [500, 1000, 1800],
         portalPairs: [
           [
-            { x1: 385, y1: 218.95, x2: 422, y2: 277.95 },
-            { x1: 120, y1: 378.95, x2: 161, y2: 435.95 }
+            { x1: 404.09, y1: 204.41, x2: 441.09, y2: 263.41 },
+            { x1: 124.54, y1: 362.59, x2: 165.54, y2: 419.59 }
           ],
           [
-            { x1: 144, y1: 208.95, x2: 102, y2: 264.95 },
-            { x1: 353, y1: 452.95, x2: 395, y2: 396.95 }
+            { x1: 122.18, y1: 191.68, x2: 80.18, y2: 247.68 },
+            { x1: 359.35, y1: 421.13, x2: 401.35, y2: 365.13 }
           ]
         ],
         ringGates: [
@@ -275,25 +253,6 @@ class LevelManager {
         goals: [
           { type: 'fruit', target: 7, count: 1, current: 0 },
           { type: 'fruit', target: 3, count: 1, current: 0 }
-        ]
-      },
-      {
-        id: 9,
-        maxSpawnTier: 5,
-        orbitRadius: 248,
-        warningLimit: 200,
-        launcherSpeed: 1.1,
-        maxSpawns: 65,
-        starScores: [600, 1200, 2000],
-        centers: [
-          { x: 260, y: 360 }
-        ],
-        shrinkZones: [
-          { x1: 100, y1: 210, x2: 250, y2: 210 }
-        ],
-        goals: [
-          { type: 'fruit', target: 7, count: 1, current: 0 },
-          { type: 'fruit', target: 4, count: 2, current: 0 }
         ]
       },
     ];

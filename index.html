@@ -32,19 +32,20 @@
           <span class="star">★</span><span class="star">★</span><span class="star">★</span>
         </div>
       </div>
-      <div class="hud-item spawn-info">
-        <span class="label">SHOTS</span>
-        <span id="spawn-display" class="value">0</span>
-      </div>
+      <button id="ingame-home-btn" class="hud-home-btn" title="Về trang chủ">🏠</button>
     </header>
 
-    <!-- GOAL: own row, the player's primary focus (Royal Match-style target) -->
+    <!-- GOAL + SHOTS row -->
     <div class="goal-row">
       <div class="hud-item goal-info">
         <span class="label">GOAL</span>
         <div id="goal-container" class="goal-badges">
           <!-- Dynamically populated goals, e.g. fruit badge with remaining count -->
         </div>
+      </div>
+      <div class="hud-item spawn-info">
+        <span class="label">SHOTS</span>
+        <span id="spawn-display" class="value">0</span>
       </div>
     </div>
 
@@ -75,11 +76,6 @@
         <span id="booster-hint-text">Tap a fruit</span>
       </div>
 
-      <!-- Manual mode rotation pads (hidden unless manual control is active) -->
-      <div id="manual-controls" class="manual-controls hidden">
-        <button id="manual-left-btn" class="manual-rotate-btn" aria-label="Xoay trái">◀</button>
-        <button id="manual-right-btn" class="manual-rotate-btn" aria-label="Xoay phải">▶</button>
-      </div>
     </div>
 
     <!-- In-game Booster Bar (below canvas, horizontal row) -->
@@ -102,9 +98,6 @@
       <button class="booster-btn" data-booster="shuffle" title="Xáo trộn các quả. Hết thì chạm để mua 600 🪙">
         <span class="booster-icon">🔀</span>
         <span class="booster-count" id="booster-count-shuffle">0</span>
-      </button>
-      <button id="ingame-home-btn" class="booster-btn ingame-home-btn" title="Về trang chủ">
-        <span class="booster-icon">🏠</span>
       </button>
     </div>
 
@@ -170,10 +163,7 @@
       </div>
     </div>
 
-    <!-- Tutorial Done Overlay (shown after tutorial merge step completes) -->
-    <div id="tutorial-done-overlay" class="hidden" style="position:absolute;bottom:120px;left:0;right:0;display:flex;justify-content:center;pointer-events:none;z-index:50;">
-      <button id="tutorial-done-btn" class="btn btn-primary" style="pointer-events:auto;padding:14px 36px;font-size:1.05em;box-shadow:0 0 24px rgba(155,81,224,0.6);">🚀 Bắt đầu chơi!</button>
-    </div>
+
 
     <!-- Screen Overlays -->
     
@@ -218,21 +208,12 @@
               <button id="mode-fruit-btn" class="mode-btn">🍎 Hoa Quả</button>
               <button id="mode-custom-btn" class="mode-btn">👥 Tùy Chỉnh</button>
             </div>
-            <div class="mode-toggle">
-              <button id="control-auto-btn" class="mode-btn">🔄 Tự Xoay</button>
-              <button id="control-manual-btn" class="mode-btn">🎯 Thủ Công</button>
-            </div>
             <button id="start-btn" class="btn btn-primary btn-pulse btn-play-large">PLAY NOW</button>
             <button id="endless-btn" class="btn btn-secondary" style="background:linear-gradient(135deg,#ff5e97,#9b51e0);color:#fff;border:none;">♾️ ENDLESS MODE</button>
             <button id="level-select-btn" class="btn btn-secondary">SELECT LEVEL</button>
-            <button id="tutorial-btn" class="btn btn-secondary" style="opacity:0.8;font-size:0.85em;">🎓 HƯỚNG DẪN</button>
-            
-            <div class="instructions">
-              <h3>How to Play:</h3>
-              <p>🔄 <strong>Tự Xoay:</strong> vòng phóng tự quay — tap để bắn vào lõi.</p>
-              <p>🎯 <strong>Thủ Công:</strong> dùng ◀ ▶ (hoặc phím ←/→, A/D) để xoay, tap/Space để bắn.</p>
-              <p>🍓 Ghép 2 quả giống nhau để tiến hóa.</p>
-            </div>
+
+
+
           </div>
         </div>
 
