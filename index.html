@@ -32,10 +32,14 @@
           <span class="star">★</span><span class="star">★</span><span class="star">★</span>
         </div>
       </div>
+      <div class="hud-item coins-info">
+        <span class="label">COINS</span>
+        <span class="coins-value">🪙 <span id="booster-coins-val">0</span></span>
+      </div>
       <button id="ingame-home-btn" class="hud-home-btn" title="Về trang chủ">🏠</button>
     </header>
 
-    <!-- GOAL + SHOTS row -->
+    <!-- GOAL + SHOTS + NEXT row -->
     <div class="goal-row">
       <div class="hud-item goal-info">
         <span class="label">GOAL</span>
@@ -46,6 +50,12 @@
       <div class="hud-item spawn-info">
         <span class="label">SHOTS</span>
         <span id="spawn-display" class="value">0</span>
+      </div>
+      <div class="next-preview-panel">
+        <span class="label">NEXT</span>
+        <div class="preview-box">
+          <canvas id="preview-canvas" width="60" height="60"></canvas>
+        </div>
       </div>
     </div>
 
@@ -80,9 +90,6 @@
 
     <!-- In-game Booster Bar (below canvas, horizontal row) -->
     <div id="booster-bar" class="booster-bar hidden">
-      <div class="booster-coins" title="Số coin hiện có — chạm booster đã hết để mua thêm">
-        <span class="bc-icon">🪙</span><span id="booster-coins-val">0</span>
-      </div>
       <button class="booster-btn" data-booster="vacuum" title="Hút 1 quả ra ngoài, giữ trong slot HELD. Hết thì chạm để mua 300 🪙">
         <span class="booster-icon">🌀</span>
         <span class="booster-count" id="booster-count-vacuum">0</span>
@@ -108,14 +115,6 @@
         <span class="label">EVOLUTION</span>
         <div class="evolution-box">
           <canvas id="evolution-canvas" width="360" height="42"></canvas>
-        </div>
-      </div>
-
-      <!-- Next Fruit Preview Panel -->
-      <div class="next-preview-panel">
-        <span class="label">NEXT</span>
-        <div class="preview-box">
-          <canvas id="preview-canvas" width="60" height="60"></canvas>
         </div>
       </div>
 

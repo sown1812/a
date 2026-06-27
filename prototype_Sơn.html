@@ -2437,16 +2437,16 @@ body {
     transform: none;
   }
 
+  .coins-info {
+    box-shadow: 0 3px 0 rgba(160, 60, 0, 0.3), 0 5px 12px rgba(200, 80, 0, 0.18),
+                inset 0 1px 2px rgba(255, 255, 255, 0.3);
+  }
+
   .hud-home-btn {
     width: 38px;
     height: 38px;
     font-size: 19px;
     box-shadow: 0 3px 0 rgba(176, 156, 217, 0.24), 0 5px 12px rgba(115, 95, 157, 0.12);
-  }
-
-  .coins-info {
-    box-shadow: 0 3px 0 rgba(160, 60, 0, 0.3), 0 5px 12px rgba(200, 80, 0, 0.18),
-                inset 0 1px 2px rgba(255, 255, 255, 0.3);
   }
 
   .spawn-info {
@@ -6132,8 +6132,8 @@ class Game {
     // Economy and progression variables
     this.coins = parseInt(localStorage.getItem('planet_merge_coins') || '100', 10);
     this.stars = parseInt(localStorage.getItem('planet_merge_stars') || '0', 10);
-    this.lives = parseInt(localStorage.getItem('planet_merge_lives') || '5', 10);
-    this.maxHearts = 5;
+    this.lives = 999;
+    this.maxHearts = 999;
     this.heartRegenMs = 30 * 60 * 1000;
     this.lastHeartRegenTime = parseInt(localStorage.getItem('planet_merge_last_heart_regen') || Date.now().toString(), 10);
     this.joinedTeam = localStorage.getItem('planet_merge_joined_team') || null;
@@ -6502,7 +6502,7 @@ class Game {
 
     if (coinsEl) coinsEl.textContent = this.coins;
     if (starsEl) starsEl.textContent = this.stars;
-    if (livesEl) livesEl.textContent = this.lives;
+    if (livesEl) livesEl.textContent = '∞';
 
     const currentLevel = this.levelManager.getCurrentLevel() || this.levelManager.levels[0];
     const lvlNameEl = document.getElementById('menu-current-level-name');
@@ -6609,10 +6609,7 @@ class Game {
   }
 
   startEndless() {
-    if (this.lives <= 0) {
-      this.showNoHeartsScreen();
-      return;
-    }
+    // offline: infinite lives, skip hearts gate
 
     this.isEndlessMode = true;
     this.physics.clear();
@@ -6678,10 +6675,7 @@ class Game {
   }
 
   startLevel(idx) {
-    if (this.lives <= 0) {
-      this.showNoHeartsScreen();
-      return;
-    }
+    // offline: infinite lives, skip hearts gate
 
     this.isEndlessMode = false;
     this._restoreHUD();
@@ -7130,6 +7124,7 @@ class Game {
   }
 
   consumeBooster(type) {
+    // offline: infinite boosters, no deduction
     this.refreshBoosterUI();
   }
 

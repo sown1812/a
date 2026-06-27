@@ -89,12 +89,7 @@ class Game {
       slow:    { icon: '🐢', hint: '', target: false },
       shuffle: { icon: '🔀', hint: '', target: false }
     };
-    this.boosters = {
-      vacuum:  parseInt(localStorage.getItem('planet_merge_ib_vacuum')  || '3', 10),
-      grow:    parseInt(localStorage.getItem('planet_merge_ib_grow')    || '3', 10),
-      slow:    parseInt(localStorage.getItem('planet_merge_ib_slow')    || '3', 10),
-      shuffle: parseInt(localStorage.getItem('planet_merge_ib_shuffle') || '3', 10)
-    };
+    this.boosters = { vacuum: 999, grow: 999, slow: 999, shuffle: 999 };
     // Coin price to buy 1 more of a booster mid-level when depleted (booster 4 = shuffle is pricier)
     this.boosterPrices = {
       vacuum:  300,
@@ -261,6 +256,26 @@ class Game {
         });
       }
     });
+
+    // Swipe up/down on menu screen to switch tabs
+    const menuScreen = document.getElementById('menu-screen');
+    if (menuScreen) {
+      let _sy = 0, _sx = 0;
+      menuScreen.addEventListener('touchstart', e => {
+        _sy = e.touches[0].clientY;
+        _sx = e.touches[0].clientX;
+      }, { passive: true });
+      menuScreen.addEventListener('touchend', e => {
+        const dy = e.changedTouches[0].clientY - _sy;
+        const dx = e.changedTouches[0].clientX - _sx;
+        if (Math.abs(dy) < 50 || Math.abs(dx) > Math.abs(dy)) return;
+        const tabOrder = ['shop', 'home', 'teams'];
+        const navBtns = tabOrder.map(t => document.getElementById(`nav-${t}-btn`));
+        const cur = navBtns.findIndex(b => b && b.classList.contains('active'));
+        const next = dy < 0 ? Math.min(cur + 1, tabOrder.length - 1) : Math.max(cur - 1, 0);
+        if (next !== cur && navBtns[next]) navBtns[next].click();
+      }, { passive: true });
+    }
 
     // Shop events and logic are handled by the Shop class in shop.js
 
@@ -992,14 +1007,13 @@ class Game {
       const countEl = document.getElementById(`booster-count-${type}`);
       if (countEl) {
         // When depleted, the badge becomes a coin price tag the player can tap to buy
-        countEl.textContent = depleted ? `🪙${price}` : count;
-        countEl.classList.toggle('price', depleted);
+        countEl.textContent = '∞';
+        countEl.classList.toggle('price', false);
       }
 
       const btn = document.querySelector(`.booster-btn[data-booster="${type}"]`);
       if (btn) {
-        btn.classList.toggle('depleted', depleted);
-        btn.classList.toggle('buyable', depleted && this.coins >= price);
+        btn.classList.remove('depleted', 'buyable');
         btn.classList.toggle('active', this.activeBooster === type);
       }
     });
@@ -1059,8 +1073,6 @@ class Game {
   }
 
   consumeBooster(type) {
-    this.boosters[type] = Math.max(0, this.boosters[type] - 1);
-    localStorage.setItem(`planet_merge_ib_${type}`, this.boosters[type]);
     this.refreshBoosterUI();
   }
 
